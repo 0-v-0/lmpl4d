@@ -12,7 +12,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 
 	alias TThis = typeof(this);
 
-	this(Stream stream)
+	this(ref Stream stream)
 	{
 		buf = AOutputBuf!Stream(stream);
 	};
@@ -197,7 +197,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/*
-	* Serializes the nil value.
+	 * Serializes the nil value.
 	*/
 	ref TThis pack(T)(in T value) if (is(Unqual!T == typeof(null)))
 	{

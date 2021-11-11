@@ -28,19 +28,19 @@ static if (real.sizeof == double.sizeof) {
 }
 
 /**
- * For float type serialization / deserialization
+ * For float type (de)serialization
  */
 union _f { float f; uint i; }
 
 
 /**
- * For double type serialization / deserialization
+ * For double type (de)serialization
  */
 union _d { double f; ulong i; }
 
 
 /**
- * For real type serialization / deserialization
+ * For real type (de)serialization
  *
  * 80-bit real is padded to 12 bytes(Linux) and 16 bytes(Mac).
  * http://lists.puremagic.com/pipermail/digitalmars-d/2010-June/077394.html
@@ -59,10 +59,7 @@ union _r
 /**
  * Detects whether $(D_PARAM T) is a built-in byte type.
  */
-template isByte(T)
-{
-	enum isByte = staticIndexOf!(Unqual!T, byte, ubyte) >= 0;
-}
+enum isByte(T) = staticIndexOf!(Unqual!T, byte, ubyte) >= 0;
 
 /**
  * Gets asterisk string from pointer type
@@ -230,20 +227,14 @@ version(betterC){}else {
 	 */
 	class MessagePackException : Exception
 	{
-		pure this(string message)
-		{
-			super(message);
-		}
+		this(string msg) { super(msg); }
 	}
 	/**
 	 * $(D UnpackException) is thrown on deserialization failure
 	 */
 	class UnpackException : MessagePackException
 	{
-		this(string message)
-		{
-			super(message);
-		}
+		this(string msg) { super(msg); }
 	}
 }
 
@@ -413,7 +404,8 @@ version(unittest)
 	package:
 	mixin template DefinePacker()
 	{
-		auto packer = Packer!(Array!ubyte)(Array!ubyte());
+		auto arr = Array!ubyte();
+		auto packer = Packer!(Array!ubyte)(arr);
 	}
 	mixin template TestUnpacker()
 	{

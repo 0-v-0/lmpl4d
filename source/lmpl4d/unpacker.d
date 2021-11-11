@@ -26,13 +26,10 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 				T val;
 				if (unpackNil(val))
 					return val;
-
 				throw new UnpackException("Can't deserialize a pointer that is not null");
 			} else static if (isTuple!T) {
 				T val;
 				unpackArray!(T.Types)(val.field);
-				//foreach (i, Type; T.Types)
-					//val.field[i] = unpack!Type(defaultValue.field[i]);
 				return val;
 			} else if (is(Unqual!T == char)) {
 				return cast(T)unpack!ubyte;
@@ -426,8 +423,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	 * Params:
 	 *  objects = the references of object to assign.
 	 *
-	 * Returns:
-	 *  self, i.e. for method chaining.
+	 * Returns: true if succeed
 	 */
 	bool unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1)
 	{
@@ -456,7 +452,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 
 		auto length = beginMap();
 		if (length != Types.length >> 1) {
-			//the number of deserialized objects is mismatched
+			// the number of deserialized objects is mismatched
 			pos -= calculateSize(length) + 1;
 			return false;
 		}
@@ -536,16 +532,6 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	 *
 	 * These methods don't deserialize contents.
 	 * You need to call unpack method to deserialize contents at your own risk.
-	 * -----
-	 * // serialized data is [1, "Hi!"];
-	 * int num;
-	 * unpacker.beginArray(2).unpack(num);  // num is 1
-	 *
-	 * // other operation
-	 *
-	 * string str;
-	 * unpacker.unpack(str);  // str is "Hi!"
-	 * -----
 	 *
 	 * Returns:
 	 *  the container size.
@@ -559,10 +545,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 
 	/**
 	 * Unpacks an EXT value into $(D type) and $(D data).
-	 * $(D type) is checked and a $(D MessagePackException) is thrown if it does
-	 *  not match. The length of $(D data) is checked and a $(D MessagePackException)
-	 *  is thrown if the lengths do not match.  If $(D data) is null, a new slice
-	 *  is returned.
+	 * Returns: true if succeed
 	 */
 	bool unpackExt(T)(ref byte type, ref T data) if(isOutputBuffer!(T, ubyte))
 	{
@@ -572,8 +555,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 
 		uint len = void;
 		uint rollbackLen = 1;
-		if (header >= Format.EXT && header <= Format.EXT + 4)
-		{
+		if (header >= Format.EXT && header <= Format.EXT + 4) {
 			// Fixed
 			len = 1 << (header - Format.EXT);
 		} else
@@ -669,11 +651,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	 *  value = the reference of value to assign.
 	 *
 	 * Returns:
-	 *  self, i.e. for method chaining.
-	 *
-	 * Throws:
-	 *  UnpackException when doesn't read from buffer or precision loss occurs and
-	 *  MessagePackException when $(D_PARAM T) type doesn't match serialized type.
+	 *  true if next object is nil.
 	 */
 	bool unpackNil(T)(ref T value)
 	{
