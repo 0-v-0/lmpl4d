@@ -40,6 +40,8 @@ else {
 
 package:
 
+enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(Unqual!T == enum);
+
 static if (real.sizeof == double.sizeof) {
 	// for 80bit real inter-operation on non-x86 CPU
 	version = NonX86;

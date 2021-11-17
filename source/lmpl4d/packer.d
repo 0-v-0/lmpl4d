@@ -214,7 +214,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T array) if ((isArray!T || isInstanceOf!(Array, T)) && !is(Unqual!T == enum))
+	ref TThis pack(T)(in T array) if (isSomeArray!T)
 	{
 		import std.range;
 		alias typeof(T.init[0]) U;

@@ -296,8 +296,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		return this;
 	}
 
-	T unpack(T)() if ((isArray!T || isInstanceOf!(Array, T)) &&
-						!is(Unqual!T == enum))
+	T unpack(T)() if (isSomeArray!T)
 	{
 		alias typeof(T.init[0]) U;
 		if (checkNil()) {
@@ -316,7 +315,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 			auto length = beginRaw();
 		else
 			auto length = beginArray();
-		version(betterC){}else {
+		version(betterC) {} else {
 			static if (__traits(compiles, buf.length))
 			if (pos + length > buf.length) {
 				import std.conv: text;
@@ -345,17 +344,17 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		return array;
 	}
 
-	T unpack(T)(T defaultValue) nothrow if ((isArray!T ||
-		isInstanceOf!(Array, T)) && !is(Unqual!T == enum))
+	bool unpack(T)(ref T array) nothrow if (isSomeArray!T)
 	{
+		import std.array;
+
 		alias typeof(T.init[0]) U;
 		if (checkNil()) {
 			static if (isStaticArray!T)
-				return defaultValue;
+				return false;
 			else {
-				T array = void;
 				unpackNil(array);
-				return array;
+				return true;
 			}
 		}
 		enum RawBytes = isByte!U || isSomeChar!U;
@@ -363,17 +362,17 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 			auto length = beginRaw();
 		else
 			auto length = beginArray();
-		version(betterC){}else {
+		version(betterC) {} else {
 			static if (__traits(compiles, buf.length))
-			if (length > buf.length)
-				return defaultValue;
+				if (length > buf.length) {
+					pos -= calculateSize(length) + 1;
+					return false;
+				}
 		}
-		static if (isStaticArray!T)
-			T array = void;
-		else
-			T array = uninitializedArray!T(length);
+		static if (!isStaticArray!T && array.length != length)
+			array = uninitializedArray!T(length);
 		if (length == 0)
-			return array;
+			return true;
 		static if (RawBytes) {
 			auto offset = calculateSize!(true)(length);
 			check(length + offset + 1);
@@ -381,11 +380,10 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 				array = (cast(U[])read(length))[0 .. T.length];
 			else
 				array = cast(T)read(length);
-		} else {
+		} else
 			foreach (ref a; array)
 				a = unpack!U;
-		}
-		return array;
+		return true;
 	}
 
 	/// ditto
