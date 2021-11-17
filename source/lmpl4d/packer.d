@@ -17,7 +17,6 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		buf = AOutputBuf!Stream(stream);
 	};
 
-
 	/**
 	 * Serializes argument and writes to stream.
 	 *
@@ -213,7 +212,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 			pack(mixin(AsteriskOf!T ~ "value"));
 		return this;
 	}
-		 
+
 	/// ditto
 	ref TThis pack(T)(in T array) if ((isArray!T || isInstanceOf!(Array, T)) && !is(Unqual!T == enum))
 	{
@@ -225,7 +224,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 
 		// Raw bytes
 		static if (isByte!U || isSomeChar!U) {
-			ubyte[] raw = cast(ubyte[])array;
+			auto raw = cast(ubyte[])array;
 
 			beginRaw(raw.length);
 			buf ~= raw;
@@ -236,17 +235,6 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		}
 		return this;
 	}
-
-	/// ditto
-	@trusted
-	ref TThis pack(T)(auto ref T t) if (isTuple!T)
-	{
-		beginArray(t.field.length);
-		foreach (f; t.field)
-			pack(f);
-		return this;
-	}
-
 
 	/// ditto
 	ref TThis pack(T)(in T array) if (isAssociativeArray!T)
@@ -281,6 +269,33 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 			return pack(cast(ushort)(value));
 		else static if (is(Unqual!T == dchar))
 			return pack(cast(uint)(value));
+	}
+
+	version(NoPackingStruct) {}
+	else {
+		ref TThis pack(T)(in T obj) if (is(Unqual!T == struct)) {
+			if (obj == T.init) {
+				beginArray(0);
+				return this;
+			}
+			beginArray(NumOfSerializingMembers!T);
+			foreach (i, f; obj.tupleof)
+				static if (isPackedField!(T.tupleof[i]) && __traits(compiles, { pack(f); }))
+					pack(f);
+			return this;
+		}
+
+		ref TThis pack(T)(in ref T obj) if (is(Unqual!T == struct)) {
+			if (obj == cast(typeof(obj))T.init) {
+				beginArray(0);
+				return this;
+			}
+			beginArray(NumOfSerializingMembers!T);
+			foreach (i, f; obj.tupleof)
+				static if (isPackedField!(T.tupleof[i]) && __traits(compiles, { pack(f); }))
+					pack(f);
+			return this;
+		}
 	}
 
 	/**

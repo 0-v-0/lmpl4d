@@ -10,6 +10,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	size_t pos;
 	this(Stream stream) { buf = stream; };
 
+	alias TThis = typeof(this);
+
 	version(betterC){
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
 			pos -= size + 1;
@@ -18,7 +20,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		}
 	} else {
 		T unpack(T)()
-		if (is(Unqual!T == enum) || isPointer!T || isTuple!T || isSomeChar!T || isNumeric!T || is(Unqual!T == bool))
+		if (is(Unqual!T == enum) || isPointer!T || isSomeChar!T || isNumeric!T || is(Unqual!T == bool))
 		{
 			static if (is(Unqual!T == enum))
 				return cast(T)unpack!(OriginalType!T);
@@ -27,17 +29,13 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 				if (unpackNil(val))
 					return val;
 				throw new UnpackException("Can't deserialize a pointer that is not null");
-			} else static if (isTuple!T) {
-				T val;
-				unpackArray!(T.Types)(val.field);
-				return val;
-			} else if (is(Unqual!T == char)) {
+			} else static if (is(Unqual!T == char))
 				return cast(T)unpack!ubyte;
-			} else static if (is(Unqual!T == wchar)) {
+			else static if (is(Unqual!T == wchar))
 				return cast(T)unpack!ushort;
-			} else static if (is(Unqual!T == dchar)) {
+			else static if (is(Unqual!T == dchar))
 				return cast(T)unpack!uint;
-			} else static if (isNumeric!T || is(Unqual!T == bool)) {
+			else static if (isNumeric!T || is(Unqual!T == bool)) {
 				check();
 				int header = read();
 				static if (isIntegral!T) {
@@ -291,7 +289,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref Unpacker unpack(Types...)(ref Types objects) if (Types.length > 1)
+	ref TThis unpack(Types...)(ref Types objects) if (Types.length > 1)
 	{
 		foreach (i, T; Types)
 			objects[i] = unpack!T;
@@ -464,10 +462,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	bool unpackAA(K, V)(K[V] defaultValue) nothrow
+	bool unpackAA(K, V)(K[V] array) nothrow
 	{
-		K[V] array;
-
 		if (unpackNil(array))
 			return true;
 
@@ -540,6 +536,38 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 
 	/// ditto
 	alias beginMap = begin!(0x80, 0x8f, Format.MAP16);
+
+	version(NoPackingStruct) {}
+	else {
+		T unpack(T)() if (is(Unqual!T == struct)) {
+			T val;
+			size_t len = beginArray();
+			if (len) {
+				if (len != NumOfSerializingMembers!T)
+					rollback(calculateSize(len), "the number of struct fields is mismatched");
+
+				foreach (i, ref member; val.tupleof)
+					static if (isPackedField!(T.tupleof[i]))
+						member = unpack!(typeof(member));
+			}
+			return val;
+		}
+
+		bool unpackObj(T)(ref T obj) if (is(Unqual!T == struct)) {
+			size_t len = beginArray();
+			if (len == 0)
+				return true;
+			if (len != NumOfSerializingMembers!T) {
+				pos -= calculateSize(len) + 1;
+				return false; // the number of struct fields is mismatched
+			}
+
+			foreach (i, ref member; obj.tupleof)
+				static if (isPackedField!(T.tupleof[i]))
+					member = unpack!(typeof(member));
+			return true;
+		}
+	}
 
 	nothrow:
 
@@ -765,6 +793,32 @@ unittest
 		assert(e == resultE);
 	}
 }
+
+version(NoPackingStruct) {}
+else unittest
+{
+	struct Test
+	{
+		string f1;
+		@nonPacked int f2;
+	}
+
+	mixin DefinePacker;
+
+	Test s = Test("foo", 10), r;
+
+	auto buf = packer.pack(s).buf[];
+	auto unpacker = Unpacker!()(buf);
+	r = unpacker.unpack!Test;
+	assert(s.f1 == r.f1);
+	assert(s.f2 != r.f2);
+	assert(r.f2 == int.init);
+
+	auto arr2 = Array!ubyte();
+	auto packer2 = Packer!(Array!ubyte)(arr2);
+	assert(packer2.pack(Test.init).buf.length < buf.length);
+}
+
 unittest
 {
 	{ // container

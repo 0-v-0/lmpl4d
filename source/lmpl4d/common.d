@@ -18,6 +18,26 @@ version(EnableReal)
 else
 	enum EnableReal = false;
 
+version(NoPackingStruct) {}
+else {
+	struct nonPacked {}
+
+	package enum isPackedField(alias field) = staticIndexOf!(nonPacked, __traits(getAttributes, field)) == -1
+		&& !isSomeFunction!(typeof(field));
+
+	/**
+	 * Get the number of member to serialize.
+	 */
+	template NumOfSerializingMembers(Classes...)
+	{
+		static if (Classes.length)
+			enum NumOfSerializingMembers = Filter!(isPackedField, Classes[0].tupleof).length +
+				NumOfSerializingMembers!(Classes[1..$]);
+		else
+			enum NumOfSerializingMembers = 0;
+	}
+}
+
 package:
 
 static if (real.sizeof == double.sizeof) {
