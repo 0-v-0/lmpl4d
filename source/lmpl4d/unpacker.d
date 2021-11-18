@@ -349,6 +349,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		import std.array;
 
 		alias typeof(T.init[0]) U;
+		const spos = pos;
 		if (checkNil()) {
 			static if (isStaticArray!T)
 				return false;
@@ -365,7 +366,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		version(betterC) {} else {
 			static if (__traits(compiles, buf.length))
 				if (length > buf.length) {
-					pos -= calculateSize(length) + 1;
+					pos = spos;
 					return false;
 				}
 		}
@@ -375,7 +376,10 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 			return true;
 		static if (RawBytes) {
 			auto offset = calculateSize!(true)(length);
-			check(length + offset + 1);
+			if(!canRead(length + offset + 1)) {
+				pos = spos;
+				return false;
+			}
 			static if (isStaticArray!T)
 				array = (cast(U[])read(length))[0 .. T.length];
 			else
@@ -424,9 +428,10 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	bool unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1)
 	{
 		auto length = beginArray();
+		const spos = pos;
 		if (length != Types.length) {
 			//the number of deserialized objects is mismatched
-			pos -= calculateSize(length) + 1;
+			pos = spos;
 			return false;
 		}
 
@@ -434,6 +439,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 			try {
 				objects[i] = unpack!T;
 			} catch (Exception e) {
+				pos = spos;
 				return false;
 			}
 		// unpack(objects);  // slow :(
@@ -447,14 +453,20 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		static assert(Types.length % 2 == 0, "The number of arguments must be even");
 
 		auto length = beginMap();
+		const spos = pos;
 		if (length != Types.length >> 1) {
 			// the number of deserialized objects is mismatched
-			pos -= calculateSize(length) + 1;
+			pos = spos;
 			return false;
 		}
 
 		foreach (i, T; Types)
-			unpack(objects[i]);
+			try {
+				objects[i] = unpack!T;
+			} catch (Exception e) {
+				pos = spos;
+				return false;
+			}
 
 		return this;
 	}
