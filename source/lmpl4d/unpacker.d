@@ -357,6 +357,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 				return true;
 			}
 		}
+		if (!canRead)
+			return false;
 		enum RawBytes = isByte!U || isSomeChar!U;
 		static if (RawBytes)
 			auto length = beginRaw();
