@@ -1,7 +1,6 @@
 module lmpl4d.unpacker;
 
 import lmpl4d.common;
-import core.stdc.stdio;
 import std.typecons;
 
 struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
@@ -370,13 +369,14 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 					return false;
 				}
 		}
-		static if (!isStaticArray!T && array.length != length)
-			array = uninitializedArray!T(length);
 		if (length == 0)
 			return true;
+		static if (!isStaticArray!T)
+			if (array.length != length)
+				array = uninitializedArray!T(length);
 		static if (RawBytes) {
 			auto offset = calculateSize!(true)(length);
-			if(!canRead(length + offset + 1)) {
+			if(!canRead(length + offset)) {
 				pos = spos;
 				return false;
 			}

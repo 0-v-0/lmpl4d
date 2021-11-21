@@ -1,5 +1,6 @@
 module lmpl4d.common;
 
+import std.container.array;
 import std.meta;
 package import std.traits;
 
@@ -225,8 +226,6 @@ enum isOutputBuffer(R, E) =
 
 unittest
 {
-	import std.container.array : Array;
-
 	static assert(!isInputBuffer!(void[], ubyte));
 	static assert(isInputBuffer!(ubyte[9], ubyte));
 	static assert(isInputBuffer!(ubyte[], ubyte));
