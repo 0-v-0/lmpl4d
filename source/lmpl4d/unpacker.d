@@ -748,9 +748,8 @@ unittest
 	{ // uint *
 		mixin DefinePacker;
 
-		auto test = tuple(ubyte.max, ushort.max,
-														uint.max,   ulong.max);
-
+		Tuple!(ubyte, ushort, uint, ulong) test = tuple(ubyte.max, ushort.max, uint.max, ulong.max),
+										result;
 		packer.pack(test);
 
 		mixin TestUnpacker;
@@ -780,8 +779,8 @@ unittest
 		{
 			alias R = real;
 		}
-		Tuple!(float, double, R) result;
-		Tuple!(float, double, R) test = tuple(float.min_normal, double.max, cast(real)R.min_normal);
+		Tuple!(float, double, R) test = tuple(float.min_normal, double.max, cast(real)R.min_normal),
+								result;
 
 		packer.pack(test);
 

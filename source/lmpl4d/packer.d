@@ -8,7 +8,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 {
 	AOutputBuf!Stream buf;
 
-	@property auto data() { return buf[]; }
+	@property auto opSlice() { return buf[]; }
 
 	alias TThis = typeof(this);
 
@@ -415,7 +415,7 @@ unittest // unique value
 	enum ubyte[] result = [Format.NIL, Format.TRUE, Format.FALSE];
 
 	packer.pack(null, true, false);
-	assert(packer.buf[] == result);
+	assert(packer[] == result);
 }
 unittest
 {
