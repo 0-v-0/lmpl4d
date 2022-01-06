@@ -1,7 +1,6 @@
 module lmpl4d.unpacker;
 
 import lmpl4d.common;
-import std.typecons;
 
 struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 {

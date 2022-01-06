@@ -1,18 +1,13 @@
 module lmpl4d.common;
 
-import std.container.array;
-import std.meta;
-package import std.traits;
+import
+	core.bitop,
+	std.container.array,
+	std.meta;
 
-// for Converting Endian using ntohs and ntohl;
-/+version(Windows)
-{
-	import core.sys.windows.winsock2;
-}
-else
-{
-	import core.sys.posix.arpa.inet;
-}+/
+package import
+	std.traits,
+	std.typecons;
 
 version(EnableReal)
 	enum EnableReal = true;
@@ -111,8 +106,7 @@ version (LittleEndian)
 	@trusted
 	ushort convertEndianTo(size_t Bit, T)(in T value) if (Bit == 16)
 	{
-		return cast(ushort)((value << 8 & 0xff00) | (value >> 8 & 0xff));
-		//return ntohs(cast(ushort)value);
+		return byteswap(cast(ushort)value);
 	}
 
 
@@ -120,24 +114,14 @@ version (LittleEndian)
 	@trusted
 	uint convertEndianTo(size_t Bit, T)(in T value) if (Bit == 32)
 	{
-		return  (value << 24 & 0xff000000) | (value << 8 & 0xff0000) |
-				(value >> 8 & 0xff00     ) | (value >> 24 & 0xff);
-		//return ntohl(cast(uint)value);
+		return bswap(cast(uint)value);
 	}
 
 	// ditto
 	@trusted
 	ulong convertEndianTo(size_t Bit, T)(in T value) if (Bit == 64)
 	{
-		// dmd has convert function?
-		return ((cast(ulong)value << 56 & 0xff00000000000000UL) |
-				(cast(ulong)value << 40 & 0x00ff000000000000UL) |
-				(cast(ulong)value << 24 & 0x0000ff0000000000UL) |
-				(cast(ulong)value <<  8 & 0x000000ff00000000UL) |
-				(cast(ulong)value >>  8 & 0x00000000ff000000UL) |
-				(cast(ulong)value >> 24 & 0x0000000000ff0000UL) |
-				(cast(ulong)value >> 40 & 0x000000000000ff00UL) |
-				(cast(ulong)value >> 56 & 0x00000000000000ffUL));
+		return bswap(value);
 	}
 
 	unittest
@@ -352,17 +336,8 @@ size_t calculateSize(bool rawType = false)(in size_t length)
 }
 
 /// Adaptive Output Buffer
-struct AOutputBuf(Stream) if(isOutputBuffer!(Stream, ubyte))
+struct AOutputBuf(Stream, T = ubyte) if(isOutputBuffer!(Stream, T))
 {
-	private union Arr(T)
-	{
-		struct {
-			size_t length;
-			T* ptr;
-		}
-		T[] array;
-	}
-
 	@property ref Stream buf()
 	{
 		return *arr;
@@ -376,7 +351,7 @@ struct AOutputBuf(Stream) if(isOutputBuffer!(Stream, ubyte))
 	Stream* arr;
 	this(ref Stream array) { arr = &array; }
 
-	ref const(Stream) opOpAssign(string op : "~")(inout(ubyte[]) rhs) {
+	ref const(Stream) opOpAssign(string op : "~")(inout(T[]) rhs) {
 		buf.reserve(buf.length + rhs.length);
 		foreach(ref elem; rhs)
 			this ~= elem;
@@ -391,7 +366,7 @@ struct AOutputBuf(Stream) if(isOutputBuffer!(Stream, ubyte))
 		static if (__traits(compiles, buf.length = buf.length + 1))
 			buf.length = sz + U.sizeof;
 		else {
-			// for Dvector!ubyte
+			// for Dvector!T
 			buf.reserve(sz + U.sizeof);
 			buf = Stream(&buf[0], sz + U.sizeof, buf.capacity);
 		}
@@ -400,16 +375,16 @@ struct AOutputBuf(Stream) if(isOutputBuffer!(Stream, ubyte))
 		return buf;
 	}
 
-	// for Array!ubyte
+	// for Array!T
 	static if (!__traits(compiles, buf[0 .. 2] == [0, 1])) {
-		ubyte[] opSlice()
+		T[] opSlice()
 		{
-			return Arr!ubyte(buf.length, &buf[0]).array;
+			return (&buf[0])[0..buf.length];
 		}
 
-		ubyte[] opSlice(size_t i, size_t j)
+		T[] opSlice(size_t i, size_t j)
 		{
-			return Arr!ubyte(j - i, &buf[i]).array;
+			return (&buf[0])[i..j];
 		}
 	}
 

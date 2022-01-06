@@ -5,13 +5,10 @@ copyright "Copyright © 2021, 0-v-0"
 license "MIT"
 targetType "library"
 configuration "library" {
-	targetType "library"
 }
 configuration "betterC" {
-	targetType "library"
 	dflags "-betterC"
 }
 configuration "lshared" {
-	targetType "library"
 	dflags "--link-defaultlib-shared" platform="ldc"
 }
