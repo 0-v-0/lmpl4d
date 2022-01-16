@@ -148,8 +148,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		}
 
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
+			import std.conv : text;
 			pos -= size + 1;
-			import std.conv: text;
 			throw new MessagePackException(text("Attempt to unpack with non-compatible type: ",
 				actual ? text("expected = ", expected, ", got = ", actual) : expected));
 		}
@@ -158,26 +158,26 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		}
 	}
 
-	T unpack(T)(T defaultValue) nothrow
+	T unpack(T)(T defValue) nothrow
 	if (is(Unqual!T == enum) || isPointer!T || isTuple!T || isSomeChar!T || isNumeric!T || is(Unqual!T == bool))
 	{
 		static if (is(Unqual!T == enum))
-			return cast(T)unpack(cast(OriginalType!T)defaultValue);
+			return cast(T)unpack(cast(OriginalType!T)defValue);
 		else static if (isPointer!T) {
 			T val;
-			return unpackNil(val) ? val : defaultValue;
+			return unpackNil(val) ? val : defValue;
 		} else static if (isTuple!T) {
 			T val;
 			unpackArray!(T.Types)(val.field);
 			return val;
 		} else if (is(Unqual!T == char)) {
-			return cast(T)unpack(cast(ubyte)defaultValue);
+			return cast(T)unpack(cast(ubyte)defValue);
 		} else static if (is(Unqual!T == wchar)) {
-			return cast(T)unpack(cast(ushort)defaultValue);
+			return cast(T)unpack(cast(ushort)defValue);
 		} else static if (is(Unqual!T == dchar)) {
-			return cast(T)unpack(cast(uint)defaultValue);
+			return cast(T)unpack(cast(uint)defValue);
 		} else static if (isNumeric!T || is(Unqual!T == bool)) {
-			if(!canRead) return defaultValue;
+			if(!canRead) return defValue;
 			int header = read();
 			static if (isIntegral!T) {
 				if (header <= 0x7f)
@@ -191,71 +191,71 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 					return false;
 			} else static if (isIntegral!T) {
 				case Format.UINT8:
-					if(!canRead(ubyte.sizeof)) return defaultValue;
+					if(!canRead(ubyte.sizeof)) return defValue;
 					return read();
 				case Format.UINT16:
-					if(!canRead(ushort.sizeof)) return defaultValue;
+					if(!canRead(ushort.sizeof)) return defValue;
 					auto val = load!ushort(read(ushort.sizeof));
 					if (val > T.max)
-						return defaultValue;
+						return defValue;
 					return cast(T)val;
 				case Format.UINT32:
-					if(!canRead(uint.sizeof)) return defaultValue;
+					if(!canRead(uint.sizeof)) return defValue;
 					auto val = load!uint(read(uint.sizeof));
 					if (val > T.max)
-						return defaultValue;
+						return defValue;
 					return cast(T)val;
 				case Format.UINT64:
-					if(!canRead(ulong.sizeof)) return defaultValue;
+					if(!canRead(ulong.sizeof)) return defValue;
 					auto val = load!ulong(read(ulong.sizeof));
 					if (val > T.max)
-						return defaultValue;
+						return defValue;
 					return cast(T)val;
 				case Format.INT8:
-					if(!canRead(byte.sizeof)) return defaultValue;
+					if(!canRead(byte.sizeof)) return defValue;
 					return cast(T)read();
 				case Format.INT16:
-					if(!canRead(short.sizeof)) return defaultValue;
+					if(!canRead(short.sizeof)) return defValue;
 					auto val = load!short(read(short.sizeof));
 					if (val < T.min || T.max < val)
-						return defaultValue;
+						return defValue;
 					return cast(T)val;
 				case Format.INT32:
-					if(!canRead(int.sizeof)) return defaultValue;
+					if(!canRead(int.sizeof)) return defValue;
 					auto val = load!int(read(int.sizeof));
 					if (val < T.min || T.max < val)
-						return defaultValue;
+						return defValue;
 					return cast(T)val;
 				case Format.INT64:
-					if(!canRead(long.sizeof)) return defaultValue;
+					if(!canRead(long.sizeof)) return defValue;
 					auto val = load!long(read(long.sizeof));
 					if (val < T.min || T.max < val)
-						return defaultValue;
+						return defValue;
 					return cast(T)val;
 			} else static if (isFloatingPoint!T) {
 				case Format.FLOAT:
 					_f val;
-					if(!canRead(uint.sizeof)) return defaultValue;
+					if(!canRead(uint.sizeof)) return defValue;
 					val.i = load!uint(read(uint.sizeof));
 					return val.f;
 				case Format.DOUBLE:
 					// check precision loss
 					static if (is(Unqual!T == float))
-						return defaultValue;
+						return defValue;
 					else {
 						_d val;
-						if(!canRead(ulong.sizeof)) return defaultValue;
+						if(!canRead(ulong.sizeof)) return defValue;
 						val.i = load!ulong(read(ulong.sizeof));
 						return val.f;
 					}
 				case Format.REAL:
-					static if (!EnableReal) return defaultValue;
+					static if (!EnableReal) return defValue;
 					else
 					{
 						// check precision loss
 						static if (is(Unqual!T == float) || is(Unqual!T == double))
-							return defaultValue;
-						if(!canRead(real.sizeof)) return defaultValue;
+							return defValue;
+						if(!canRead(real.sizeof)) return defValue;
 						version (NonX86)
 						{
 							CustomFloat!80 temp;
@@ -281,7 +281,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 						}
 					}
 				}
-				default: return defaultValue;
+				default: return defValue;
 			}
 		}
 	}
@@ -831,6 +831,7 @@ else unittest
 
 unittest
 {
+	import std.conv : text;
 	{ // container
 		mixin DefinePacker;
 
@@ -847,7 +848,6 @@ unittest
 		foreach (L; AliasSeq!(1, 2, 3, 4, 5, 8, 9, 16, 32, 512, 2^^16))
 		{
 			mixin DefinePacker;
-			import std.conv : text;
 
 			auto data = new ubyte[L];
 			data.fillData;

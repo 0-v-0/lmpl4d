@@ -376,7 +376,7 @@ struct AOutputBuf(Stream, T = ubyte) if(isOutputBuffer!(Stream, T))
 	}
 
 	// for Array!T
-	static if (!__traits(compiles, buf[0 .. 2] == [0, 1])) {
+	static if (!__traits(compiles, buf[0 .. 2] == [0, 1])) @nogc {
 		T[] opSlice()
 		{
 			return (&buf[0])[0..buf.length];
