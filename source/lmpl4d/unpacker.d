@@ -117,26 +117,26 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 								check(real.sizeof);
 								version (NonX86)
 								{
-									CustomFloat!80 temp;
+									CustomFloat!80 tmp;
 
 									const frac = load!ulong (read(ulong.sizeof));
 									const exp  = load!ushort(read(ushort.sizeof));
 
-									temp.significand = frac;
-									temp.exponent    = exp & 0x7fff;
-									temp.sign        = (exp & 0x8000) != 0;
+									tmp.significand = frac;
+									tmp.exponent    = exp & 0x7fff;
+									tmp.sign        = (exp & 0x8000) != 0;
 
-									// NOTE: temp.get!real is inf on non-x86 when deserialized value is larger than double.max.
-									return temp.get!real;
+									// NOTE: tmp.get!real is inf on non-x86 when deserialized value is larger than double.max.
+									return tmp.get!real;
 								}
 								else
 								{
-									_r temp;
+									_r tmp;
 
-									temp.fraction = load!(typeof(temp.fraction))(read(temp.fraction.sizeof));
-									temp.exponent = load!(typeof(temp.exponent))(read(temp.exponent.sizeof));
+									tmp.fraction = load!(typeof(tmp.fraction))(read(tmp.fraction.sizeof));
+									tmp.exponent = load!(typeof(tmp.exponent))(read(tmp.exponent.sizeof));
 
-									return temp.f;
+									return tmp.f;
 								}
 							}
 						}
@@ -243,7 +243,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 					static if (is(Unqual!T == float))
 						return defValue;
 					else {
-						_d val;
+						_d val = void;
 						if(!canRead(ulong.sizeof)) return defValue;
 						val.i = load!ulong(read(ulong.sizeof));
 						return val.f;
@@ -258,26 +258,26 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 						if(!canRead(real.sizeof)) return defValue;
 						version (NonX86)
 						{
-							CustomFloat!80 temp;
+							CustomFloat!80 tmp;
 
 							const frac = load!ulong (read(ulong.sizeof));
 							const exp  = load!ushort(read(ushort.sizeof));
 
-							temp.significand = frac;
-							temp.exponent    = exp & 0x7fff;
-							temp.sign        = (exp & 0x8000) != 0;
+							tmp.significand = frac;
+							tmp.exponent    = exp & 0x7fff;
+							tmp.sign        = (exp & 0x8000) != 0;
 
-							// NOTE: temp.get!real is inf on non-x86 when deserialized value is larger than double.max.
-							return temp.get!real;
+							// NOTE: tmp.get!real is inf on non-x86 when deserialized value is larger than double.max.
+							return tmp.get!real;
 						}
 						else
 						{
-							_r temp;
+							_r tmp = void;
 
-							temp.fraction = load!(typeof(temp.fraction))(read(temp.fraction.sizeof));
-							temp.exponent = load!(typeof(temp.exponent))(read(temp.exponent.sizeof));
+							tmp.fraction = load!(typeof(tmp.fraction))(read(tmp.fraction.sizeof));
+							tmp.exponent = load!(typeof(tmp.exponent))(read(tmp.exponent.sizeof));
 
-							return temp.f;
+							return tmp.f;
 						}
 					}
 				}
@@ -727,11 +727,10 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	}
 }
 
-version(unittest){
-	import lmpl4d.packer;
-	import std.exception;
-	import std.typecons;
-}
+version(unittest)
+	import
+		lmpl4d.packer,
+		std.exception;
 
 unittest
 {

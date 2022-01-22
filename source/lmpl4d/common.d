@@ -2,10 +2,10 @@ module lmpl4d.common;
 
 import
 	core.bitop,
-	std.container.array,
-	std.meta;
+	std.container.array;
 
 package import
+	std.meta,
 	std.traits,
 	std.typecons;
 
@@ -50,12 +50,10 @@ static if (real.sizeof == double.sizeof) {
  */
 union _f { float f; uint i; }
 
-
 /**
  * For double type (de)serialization
  */
 union _d { double f; ulong i; }
-
 
 /**
  * For real type (de)serialization
@@ -77,7 +75,7 @@ union _r
 /**
  * Detects whether $(D_PARAM T) is a built-in byte type.
  */
-enum isByte(T) = staticIndexOf!(Unqual!T, byte, ubyte) >= 0;
+enum isByte(T) = is(Unqual!T == byte) || is(Unqual!T == ubyte);
 
 /**
  * Gets asterisk string from pointer type
@@ -88,6 +86,17 @@ template AsteriskOf(T)
 		enum AsteriskOf = "*" ~ AsteriskOf!U;
 	else
 		enum AsteriskOf = "";
+}
+
+version(unittest)
+void fillData(T)(ref T data)
+{
+	import core.stdc.stdlib;
+	import std.datetime.systime;
+
+	srand(cast(uint)Clock.currStdTime);
+	foreach(ref x; data)
+		x = cast(ubyte)rand();
 }
 
 public:
@@ -243,19 +252,6 @@ version(betterC){}else {
 	}
 }
 
-version(unittest)
-{
-	package void fillData(T)(ref T data)
-	{
-		import core.stdc.stdlib;
-		import std.datetime.systime;
-
-		srand(cast(uint)Clock.currStdTime);
-		foreach(ref x; data)
-			x = cast(ubyte)rand();
-	}
-}
-
 nothrow @nogc pure:
 
 /**
@@ -330,23 +326,18 @@ enum Format : ubyte
 size_t calculateSize(bool rawType = false)(in size_t length)
 {
 	static if (rawType)
-		return length < 32 ? 0 : length < 65536 ? ushort.sizeof : uint.sizeof;
+		enum S = 32;
 	else
-		return length < 16 ? 0 : length < 65536 ? ushort.sizeof : uint.sizeof;
+		enum S = 16;
+	return length < S ? 0 : length < 65536 ? ushort.sizeof : uint.sizeof;
 }
 
 /// Adaptive Output Buffer
 struct AOutputBuf(Stream, T = ubyte) if(isOutputBuffer!(Stream, T))
 {
-	@property ref Stream buf()
-	{
-		return *arr;
-	}
+	@property ref Stream buf() { return *arr; }
 
-	@property ref const(Stream) buf() const
-	{
-		return *arr;
-	}
+	@property ref const(Stream) buf() const { return *arr; }
 
 	Stream* arr;
 	this(ref Stream array) { arr = &array; }
@@ -393,20 +384,20 @@ struct AOutputBuf(Stream, T = ubyte) if(isOutputBuffer!(Stream, T))
 
 version(unittest)
 {
-	import std.container.array;
-	import std.meta;
-	import std.file, core.stdc.string;
+	import
+		std.container.array,
+		core.stdc.string;
 
 	package:
-	mixin template DefinePacker()
+	template DefinePacker()
 	{
 		auto arr = Array!ubyte();
 		auto packer = Packer!(Array!ubyte)(arr);
 	}
-	mixin template TestUnpacker()
+	template TestUnpacker()
 	{
 		auto unpacker = Unpacker!()(packer.buf[]);
-		static if (__traits(compiles, typeof(test))) {
+		static if (is(typeof(test))) {
 			auto result = unpacker.unpack!(typeof(test));
 			auto testfunc = {
 				import std.conv : text;

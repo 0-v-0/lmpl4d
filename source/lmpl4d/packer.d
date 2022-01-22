@@ -1,7 +1,6 @@
 module lmpl4d.packer;
 
 import lmpl4d.common;
-import std.meta;
 
 struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 {
