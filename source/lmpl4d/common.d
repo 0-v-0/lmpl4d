@@ -118,7 +118,6 @@ version (LittleEndian)
 		return byteswap(cast(ushort)value);
 	}
 
-
 	// ditto
 	@trusted
 	uint convertEndianTo(size_t Bit, T)(in T value) if (Bit == 32)
@@ -148,16 +147,6 @@ version (LittleEndian)
 	{
 		return (cast(ubyte*)&value)[0];
 	}
-
-	unittest
-	{
-		foreach (Integer; AliasSeq!(ubyte, ushort, uint, ulong)) {
-			assert(take8from!8 (cast(Integer)0x01)               == 0x01);
-			assert(take8from!16(cast(Integer)0x0123)             == 0x23);
-			assert(take8from!32(cast(Integer)0x01234567)         == 0x67);
-			assert(take8from!64(cast(Integer)0x0123456789abcdef) == 0xef);
-		}
-	}
 }
 else
 {
@@ -184,7 +173,6 @@ else
 		assert(convertEndianTo!64(0x0123456789) == 0x0123456789);
 	}
 
-
 	/*
 	 * Takes 8bit from $(D_PARAM value)
 	 *
@@ -199,15 +187,15 @@ else
 	{
 		return (cast(ubyte*)&value)[(bit >> 3) - 1];
 	}
+}
 
-	unittest
-	{
-		foreach (Integer; AliasSeq!(ubyte, ushort, uint, ulong)) {
-			assert(take8from!8 (cast(Integer)0x01)               == 0x01);
-			assert(take8from!16(cast(Integer)0x0123)             == 0x23);
-			assert(take8from!32(cast(Integer)0x01234567)         == 0x67);
-			assert(take8from!64(cast(Integer)0x0123456789abcdef) == 0xef);
-		}
+unittest
+{
+	foreach (Int; AliasSeq!(ubyte, ushort, uint, ulong)) {
+		assert(take8from!8 (cast(Int)0x01)               == 0x01);
+		assert(take8from!16(cast(Int)0x0123)             == 0x23);
+		assert(take8from!32(cast(Int)0x01234567)         == 0x67);
+		assert(take8from!64(cast(Int)0x0123456789abcdef) == 0xef);
 	}
 }
 

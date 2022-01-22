@@ -282,18 +282,6 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 					pack(f);
 			return this;
 		}
-
-		ref TThis pack(T)(in ref T obj) if (is(Unqual!T == struct)) {
-			if (obj == cast(typeof(obj))T.init) {
-				beginArray(0);
-				return this;
-			}
-			beginArray(NumOfSerializingMembers!T);
-			foreach (i, f; obj.tupleof)
-				static if (isPackedField!(T.tupleof[i]) && __traits(compiles, { pack(f); }))
-					pack(f);
-			return this;
-		}
 	}
 
 	/**

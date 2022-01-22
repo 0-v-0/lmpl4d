@@ -170,13 +170,13 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 			T val;
 			unpackArray!(T.Types)(val.field);
 			return val;
-		} else if (is(Unqual!T == char)) {
+		} else if (is(Unqual!T == char))
 			return cast(T)unpack(cast(ubyte)defValue);
-		} else static if (is(Unqual!T == wchar)) {
+		else static if (is(Unqual!T == wchar))
 			return cast(T)unpack(cast(ushort)defValue);
-		} else static if (is(Unqual!T == dchar)) {
+		else static if (is(Unqual!T == dchar))
 			return cast(T)unpack(cast(uint)defValue);
-		} else static if (isNumeric!T || is(Unqual!T == bool)) {
+		else static if (isNumeric!T || is(Unqual!T == bool)) {
 			if(!canRead) return defValue;
 			int header = read();
 			static if (isIntegral!T) {
