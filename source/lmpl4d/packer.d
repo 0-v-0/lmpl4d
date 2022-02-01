@@ -272,13 +272,13 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	version(NoPackingStruct) {}
 	else {
 		ref TThis pack(T)(in T obj) if (is(Unqual!T == struct)) {
-			if (obj == T.init) {
+			if (T.init == obj) {
 				beginArray(0);
 				return this;
 			}
 			beginArray(NumOfSerializingMembers!T);
-			foreach (i, f; obj.tupleof)
-				static if (isPackedField!(T.tupleof[i]) && __traits(compiles, { pack(f); }))
+			foreach (f; obj.tupleof)
+				static if (isPackedField!f && __traits(compiles, { pack(f); }))
 					pack(f);
 			return this;
 		}

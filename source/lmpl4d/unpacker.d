@@ -14,8 +14,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
 			pos -= size + 1;
 		}
-		void check(size_t size = 1) {
-		}
+
+		void check(size_t size = 1) {}
 	} else {
 		T unpack(T)()
 		if (is(Unqual!T == enum) || isPointer!T || isSomeChar!T || isNumeric!T || is(Unqual!T == bool))
@@ -351,10 +351,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		if (checkNil()) {
 			static if (isStaticArray!T)
 				return false;
-			else {
-				unpackNil(array);
-				return true;
-			}
+			else
+				return unpackNil(array);
 		}
 		if (!canRead)
 			return false;
