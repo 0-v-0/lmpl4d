@@ -215,13 +215,12 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	ref TThis pack(T)(in T array) if (isSomeArray!T)
 	{
 		import std.range;
-		alias typeof(T.init[0]) U;
 
 		if (array.empty)
 			return pack(null);
 
 		// Raw bytes
-		static if (isByte!U || isSomeChar!U) {
+		static if (isRawByte!(typeof(T.init[0]))) {
 			auto raw = cast(ubyte[])array;
 
 			beginRaw(raw.length);

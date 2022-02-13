@@ -46,13 +46,10 @@ static if (real.sizeof == double.sizeof) {
 }
 
 /**
- * For float type (de)serialization
+ * For float/double type (de)serialization
  */
 union _f { float f; uint i; }
 
-/**
- * For double type (de)serialization
- */
 union _d { double f; ulong i; }
 
 /**
@@ -72,10 +69,7 @@ union _r
 	}
 }
 
-/**
- * Detects whether $(D_PARAM T) is a built-in byte type.
- */
-enum isByte(T) = is(Unqual!T == byte) || is(Unqual!T == ubyte);
+enum isRawByte(T) = is(Unqual!T : ubyte) || isSomeChar!T;
 
 /**
  * Gets asterisk string from pointer type
@@ -223,7 +217,7 @@ unittest
 }
 
 version(betterC){}else {
-	@trusted:
+	pure:
 	/**
 	 * $(D MessagePackException) is a root Exception for MessagePack related operation.
 	 */
@@ -313,11 +307,8 @@ enum Format : ubyte
  */
 size_t calculateSize(bool rawType = false)(in size_t length)
 {
-	static if (rawType)
-		enum S = 32;
-	else
-		enum S = 16;
-	return length < S ? 0 : length < 65536 ? ushort.sizeof : uint.sizeof;
+	enum S = rawType ? 32 : 16;
+	return length < S ? 0 : length <= ushort.max ? ushort.sizeof : uint.sizeof;
 }
 
 /// Adaptive Output Buffer

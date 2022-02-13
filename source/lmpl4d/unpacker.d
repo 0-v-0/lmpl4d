@@ -2,13 +2,11 @@ module lmpl4d.unpacker;
 
 import lmpl4d.common;
 
-struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
+struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 {
 	Stream buf;
 	size_t pos;
-	this(Stream stream) { buf = stream; };
-
-	alias TThis = typeof(this);
+	this(Stream stream) { buf = stream; }
 
 	version(betterC){
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
@@ -170,7 +168,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 			T val;
 			unpackArray!(T.Types)(val.field);
 			return val;
-		} else if (is(Unqual!T == char))
+		} else static if (is(Unqual!T == char))
 			return cast(T)unpack(cast(ubyte)defValue);
 		else static if (is(Unqual!T == wchar))
 			return cast(T)unpack(cast(ushort)defValue);
@@ -287,7 +285,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis unpack(Types...)(ref Types objects) if (Types.length > 1)
+	ref typeof(this) unpack(Types...)(ref Types objects) if (Types.length > 1)
 	{
 		foreach (i, T; Types)
 			objects[i] = unpack!T;
@@ -296,7 +294,6 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 
 	T unpack(T)() if (isSomeArray!T)
 	{
-		alias typeof(T.init[0]) U;
 		if (checkNil()) {
 			static if (isStaticArray!T) {
 				pos++;
@@ -308,7 +305,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 				return array;
 			}
 		}
-		enum RawBytes = isByte!U || isSomeChar!U;
+		alias U = typeof(T.init[0]);
+		enum RawBytes = isRawByte!U;
 		static if (RawBytes)
 			auto length = beginRaw();
 		else
@@ -346,7 +344,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	{
 		import std.array;
 
-		alias typeof(T.init[0]) U;
+		alias U = typeof(T.init[0]);
 		const spos = pos;
 		if (checkNil()) {
 			static if (isStaticArray!T)
@@ -356,7 +354,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		}
 		if (!canRead)
 			return false;
-		enum RawBytes = isByte!U || isSomeChar!U;
+
+		enum RawBytes = isRawByte!U;
 		static if (RawBytes)
 			auto length = beginRaw();
 		else
@@ -392,8 +391,8 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	/// ditto
 	T unpack(T)() if (isAssociativeArray!T)
 	{
-		alias typeof(T.init.keys[0])   K;
-		alias typeof(T.init.values[0]) V;
+		alias K = typeof(T.init.keys[0]),
+			  V = typeof(T.init.values[0]);
 		T array;
 
 		if (unpackNil(array))
@@ -649,7 +648,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		return buf[pos++];
 	}
 
-	ubyte[] read(size_t size)
+	auto read(size_t size)
 	{
 		auto result = buf[pos..pos+size];
 		pos += size;
@@ -712,7 +711,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 	 * Returns:
 	 *  the Endian-converted value.
 	 */
-	package T load(T)(ubyte[] buf)
+	package T load(T)(in ubyte[] buf)
 	{
 		static if (isIntegral!T && T.sizeof == 2)
 			enum bit = 16;
@@ -721,7 +720,7 @@ struct Unpacker(Stream = ubyte[]) if(isInputBuffer!(Stream, ubyte))
 		else static if (isIntegral!T && T.sizeof == 8)
 			enum bit = 64;
 		else static assert(0, "Unsupported type");
-		return convertEndianTo!bit(*cast(T*)buf.ptr);
+		return convertEndianTo!bit(*cast(const T*)buf.ptr);
 	}
 }
 
