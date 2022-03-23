@@ -1,7 +1,7 @@
 name "lmpl4d"
 description "Lightweight MessagePack library for D"
 authors "0-v-0"
-copyright "Copyright © 2021, 0-v-0"
+copyright "Copyright © 2021-2022, 0-v-0"
 license "MIT"
 targetType "library"
 dflags "-preview=in"

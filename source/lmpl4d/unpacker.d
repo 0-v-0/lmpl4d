@@ -549,8 +549,7 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 	else {
 		T unpack(T)() if (is(Unqual!T == struct)) {
 			T val;
-			size_t len = beginArray();
-			if (len) {
+			if (auto len = beginArray()) {
 				if (len != NumOfSerializingMembers!T)
 					rollback(calculateSize(len), "the number of struct fields is mismatched");
 
@@ -562,7 +561,7 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 		}
 
 		bool unpackObj(T)(ref T obj) if (is(Unqual!T == struct)) {
-			size_t len = beginArray();
+			auto len = beginArray();
 			if (len == 0)
 				return true;
 			if (len != NumOfSerializingMembers!T) {
@@ -634,9 +633,8 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 
 		// Read type
 		type = read();
-        // Read and check data
-		auto obuf = AOutputBuf!T(data);
-		obuf ~= read(len);
+		// Read and check data
+		AOutputBuf!T(data) ~= read(len);
 		return true;
 	}
 
@@ -734,7 +732,7 @@ unittest
 	{ // unique
 		mixin DefinePacker;
 
-		Tuple!(bool, bool) test = tuple(true, false), result;
+		auto test = tuple(true, false);
 
 		packer.pack(test);
 
@@ -743,8 +741,7 @@ unittest
 	{ // uint *
 		mixin DefinePacker;
 
-		Tuple!(ubyte, ushort, uint, ulong) test = tuple(ubyte.max, ushort.max, uint.max, ulong.max),
-										result;
+		auto test = tuple(ubyte.max, ushort.max, uint.max, ulong.max);
 		packer.pack(test);
 
 		mixin TestUnpacker;
@@ -752,9 +749,7 @@ unittest
 	{ // int *
 		mixin DefinePacker;
 
-		Tuple!(byte, short, int, long) test = tuple(byte.min, short.min,
-													int.min,   long.min),
-										result;
+		auto test = tuple(byte.min, short.min, int.min, long.min);
 
 		packer.pack(test);
 
@@ -774,8 +769,7 @@ unittest
 		{
 			alias R = real;
 		}
-		Tuple!(float, double, R) test = tuple(float.min_normal, double.max, cast(real)R.min_normal),
-								result;
+		Tuple!(float, double, R) test = tuple(float.min_normal, double.max, cast(real)R.min_normal);
 
 		packer.pack(test);
 
