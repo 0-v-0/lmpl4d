@@ -13,7 +13,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	this(ref Stream stream)
 	{
 		buf = AOutputBuf!Stream(stream);
-	};
+	}
 
 	/**
 	 * Serializes argument and writes to stream.
@@ -47,122 +47,87 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	/// ditto
 	ref TThis pack(T)(in T value) if (isUnsigned!T && !is(Unqual!T == enum))
 	{
-		// ulong < ulong is slower than uint < uint
-		static if (is(Unqual!T  == ulong)) {
-			if (value < (1UL << 8)) {
-				if (value < (1UL << 7)) {
-					// fixnum
-					buf ~= take8from!64(value);
-				} else {
-					buf ~= Format.UINT8;
-					buf ~= take8from!64(value);
-				}
-			} else
-				if (value < (1UL << 16)) {
-					buf ~= Format.UINT16;
-					buf ~= convertEndianTo!16(value);
-				} else if (value < (1UL << 32)){
+		if (value < (1 << 8)) {
+			if (value < (1 << 7)) {
+				// fixnum
+				buf ~= take8from(value);
+			} else {
+				buf ~= Format.UINT8;
+				buf ~= take8from(value);
+			}
+		} else if (value < (1 << 16)) {
+			buf ~= Format.UINT16;
+			buf ~= toBE(cast(ushort)value);
+		} else
+			// ulong < ulong is slower than uint < uint
+			static if (T.sizeof == 8) {
+				if (value < (1UL << 32)){
 					buf ~= Format.UINT32;
-					buf ~= convertEndianTo!32(value);
+					buf ~= toBE(cast(uint)value);
 				} else {
 					buf ~= Format.UINT64;
-					buf ~= convertEndianTo!64(value);
+					buf ~= toBE(cast(ulong)value);
 				}
-		} else {
-			enum Bits = T.sizeof * 8;
-
-			if (value < (1 << 8)) {
-				if (value < (1 << 7)) {
-					// fixnum
-					buf ~= take8from!Bits(value);
-				} else {
-					buf ~= Format.UINT8;
-					buf ~= take8from!Bits(value);
-				}
-			} else
-				if (value < (1 << 16)) {
-					buf ~= Format.UINT16;
-					buf ~= convertEndianTo!16(value);
-				} else {
-					buf ~= Format.UINT32;
-					buf ~= convertEndianTo!32(value);
-				}
-		}
+			} else {
+				buf ~= Format.UINT32;
+				buf ~= toBE(cast(uint)value);
+			}
 		return this;
 	}
 
 	/// ditto
 	ref TThis pack(T)(in T value) if (isSigned!T && isIntegral!T && !is(Unqual!T == enum))
 	{
-		// long < long is slower than int < int
-		static if (is(Unqual!T == long)) {
-			if (value < -(1L << 5)) {
-				if (value < -(1L << 15)) {
+		if (value < -(1 << 5)) {
+			if (value < -(1 << 15)) {
+				static if (T.sizeof == 8) {
 					if (value < -(1L << 31)) {
 						buf ~= Format.INT64;
-						buf ~= convertEndianTo!64(value);
-					} else {
-						buf ~= Format.INT32;
-						buf ~= convertEndianTo!32(value);
+						buf ~= toBE(cast(ulong)value);
+						return this;
 					}
-				} else
-					if (value < -(1L << 7)) {
-						buf ~= Format.INT16;
-						buf ~= convertEndianTo!16(value);
-					} else {
-						buf ~= Format.INT8;
-						buf ~= take8from!64(value);
-					}
-			} else if (value < (1L << 7)) {
-				// fixnum
-				buf ~= take8from!64(value);
+				}
+				buf ~= Format.INT32;
+				buf ~= toBE(cast(uint)value);
+			} else if (value < -(1 << 7)) {
+				buf ~= Format.INT16;
+				buf ~= toBE(cast(ushort)value);
 			} else {
+				buf ~= Format.INT8;
+				buf ~= take8from(value);
+			}
+		} else if (value < (1 << 7)) {
+			// fixnum
+			buf ~= take8from(value);
+		} else
+			static if (T.sizeof == 8) {
 				if (value < (1L << 16)) {
 					if (value < (1L << 8)) {
 						buf ~= Format.UINT8;
-						buf ~= take8from!64(value);
+						buf ~= take8from(value);
 					} else {
 						buf ~= Format.UINT16;
-						buf ~= convertEndianTo!16(value);
+						buf ~= toBE(cast(ushort)value);
 					}
-				} else
-					if (value < (1L << 32)) {
-						buf ~= Format.UINT32;
-						buf ~= convertEndianTo!32(value);
-					} else {
-						buf ~= Format.UINT64;
-						buf ~= convertEndianTo!64(value);
-					}
-			}
-		} else {
-			enum Bits = T.sizeof << 3;
-
-			if (value < -(1 << 5)) {
-				if (value < -(1 << 15)) {
-					buf ~= Format.INT32;
-					buf ~= convertEndianTo!32(value);
-				} else if (value < -(1 << 7)) {
-					buf ~= Format.INT16;
-					buf ~= convertEndianTo!16(value);
+				} else if (value < (1L << 32)) {
+					buf ~= Format.UINT32;
+					buf ~= toBE(cast(uint)value);
 				} else {
-					buf ~= Format.INT8;
-					buf ~= take8from!Bits(value);
+					buf ~= Format.UINT64;
+					buf ~= toBE(cast(ulong)value);
 				}
-			} else if (value < (1 << 7)) {
-				// fixnum
-				buf ~= take8from!Bits(value);
-			} else
+			} else {
 				if (value < (1 << 8)) {
 					buf ~= Format.UINT8;
-					buf ~= take8from!Bits(value);
+					buf ~= take8from(value);
 				} else if (value < (1 << 16)) {
 					buf ~= Format.UINT16;
-					buf ~= convertEndianTo!16(value);
+					buf ~= toBE(cast(ushort)value);
 				} else {
 					buf ~= Format.UINT32;
-					buf ~= convertEndianTo!32(value);
+					buf ~= toBE(cast(uint)value);
 				}
-		}
+			}
 
 		return this;
 	}
@@ -172,16 +137,16 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	{
 		static if (is(Unqual!T == float)) {
 			buf ~= Format.FLOAT;
-			buf ~= convertEndianTo!32(_f(value).i);
+			buf ~= toBE(cast(uint)_f(value).i);
 		} else static if (is(Unqual!T == double) || !EnableReal
 			|| real.sizeof == double.sizeof) { // Non-x86 CPUs, real type equals double type.
 			buf ~= Format.DOUBLE;
-			buf ~= convertEndianTo!64(_d(value).i);
+			buf ~= toBE(cast(ulong)_d(value).i);
 		} else {
 			buf ~= Format.REAL;
 			const tmp = _r(value);
-			buf ~= convertEndianTo!64(tmp.fraction);
-			buf ~= convertEndianTo!16(tmp.exponent);
+			buf ~= toBE(cast(ulong)tmp.fraction);
+			buf ~= toBE(cast(ushort)tmp.exponent);
 		}
 
 		return this;
@@ -196,7 +161,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	/*
 	 * Serializes the nil value.
 	*/
-	ref TThis pack(T)(in T value) if (is(Unqual!T == typeof(null)))
+	ref TThis pack(T)(in T) if (is(Unqual!T == typeof(null)))
 	{
 		buf ~= Format.NIL;
 		return this;
@@ -223,7 +188,10 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		static if (isRawByte!(typeof(T.init[0]))) {
 			auto raw = cast(ubyte[])array;
 
-			beginRaw(raw.length);
+			static if (isSomeChar!(typeof(T.init[0])))
+				beginStr(raw.length);
+			else
+				beginRaw(raw.length);
 			buf ~= raw;
 		} else {
 			beginArray(array.length);
@@ -236,7 +204,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	/// ditto
 	ref TThis pack(T)(in T array) if (isAssociativeArray!T)
 	{
-		if (array is null)
+		if (!array)
 			return pack(null);
 
 		beginMap(array.length);
@@ -260,12 +228,12 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	/// ditto
 	ref TThis pack(T)(in T value) if (isSomeChar!T && !is(Unqual!T == enum))
 	{
-		static if (is(Unqual!T == char))
-			return pack(cast(ubyte)(value));
-		else static if (is(Unqual!T == wchar))
-			return pack(cast(ushort)(value));
-		else static if (is(Unqual!T == dchar))
-			return pack(cast(uint)(value));
+		static if (T.sizeof == 1)
+			return pack(cast(ubyte)value);
+		else static if (T.sizeof == 2)
+			return pack(cast(ushort)value);
+		else
+			return pack(cast(uint)value);
 	}
 
 	version(NoPackingStruct) {}
@@ -311,9 +279,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 
 	/// ditto
 	ref TThis packMap(Types...)(auto ref const Types objects)
-	{
-		static assert((Types.length & 1) == 0, "The number of arguments must be even");
-
+	if((Types.length & 1) == 0) {
 		beginMap(Types.length >> 1);
 		foreach (i, T; Types)
 			pack(objects[i]);
@@ -322,7 +288,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	ref TThis packExt(in byte type, const ubyte[] data) return
-	{
+	in(data.length <= uint.max) {
 		ref TThis packExtFixed(int fmt)
 		{
 			buf ~= cast(ubyte)fmt;
@@ -341,41 +307,37 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 			default: break;
 		}
 
-		int typeByte = void;
-		if (data.length <= 0xff)
-		{
-			buf ~= Format.EXT8;
-			buf ~= cast(ubyte)data.length;
-			typeByte = 2;
-		} else if (data.length <= 0xffff) {
-			buf ~= Format.EXT16;
-			buf ~= convertEndianTo!16(data.length);
-			typeByte = 3;
-		} else if (data.length <= 0x7fffffff) {
-			buf ~= Format.EXT32;
-			buf ~= convertEndianTo!32(data.length);
-			typeByte = 5;
-		} //else
-			//throw new Exception("Data too large to pack as EXT");
+		begin!(Format.EXT8, Format.EXT16, 0)(data.length);
 		buf ~= type;
 		buf ~= data;
 
 		return this;
 	}
 
-	ref TThis begin(Format f1, Format f2, size_t llen = 16)(size_t len) return
+	ref TThis begin(Format f, Format f16, size_t llen = 16)(size_t len) return
 	{
-		if (len < llen) {
-			buf ~= take8from(f1 | cast(ubyte)len);
-		} else if (len < 65536) {
-			buf ~= f2;
-			buf ~= convertEndianTo!16(len);
+		if (len <= ushort.max) {
+			static if (llen) {
+				if (len < llen) {
+					buf ~= take8from(f | cast(ubyte)len);
+					return this;
+				}
+			}
+			static if (f != Format.ARRAY && f != Format.MAP) {
+				if (len <= ubyte.max) {
+					buf ~= cast(Format)(f16 - 1);
+					buf ~= cast(ubyte)len;
+					return this;
+				}
+			}
+			buf ~= f16;
+			buf ~= toBE(cast(ushort)len);
 		} else {
-			if (len > 0xffffffff)
-				assert(0, "size of array is too long to pack, should be <= 0xffffffff");
+			if (len > uint.max)
+				throw new Exception("Data is too large to pack");
 
-			buf ~= cast(Format)(f2 + 1);
-			buf ~= convertEndianTo!32(len);
+			buf ~= cast(Format)(f16 + 1);
+			buf ~= toBE(cast(uint)len);
 		}
 
 		return this;
@@ -384,7 +346,10 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	/*
 	 * Serializes raw type-information to buf for binary type.
 	 */
-	alias beginRaw = begin!(Format.RAW, Format.RAW16, 32);
+	alias beginRaw = begin!(Format.BIN8, Format.BIN16, 0);
+
+	/// ditto
+	alias beginStr = begin!(Format.STR, Format.STR16, 32);
 
 	/// ditto
 	alias beginArray = begin!(Format.ARRAY, Format.ARRAY16);
@@ -405,7 +370,7 @@ unittest // unique value
 unittest
 {
 	{ // uint *
-		static struct UTest { ubyte format; ulong value; }
+		struct UTest { ubyte format; ulong value; }
 
 		enum : ulong { A = ubyte.max, B = ushort.max, C = uint.max, D = ulong.max }
 
@@ -425,26 +390,26 @@ unittest
 
 				switch (i) {
 				case 0:
-					auto answer = take8from!(T.sizeof * 8)(test.value);
+					auto answer = take8from(test.value);
 					assert(memcmp(&packer.buf[1], &answer, ubyte.sizeof) == 0);
 					break;
 				case 1:
-					auto answer = convertEndianTo!16(test.value);
+					auto answer = toBE(cast(ushort)test.value);
 					assert(memcmp(&packer.buf[1], &answer, ushort.sizeof) == 0);
 					break;
 				case 2:
-					auto answer = convertEndianTo!32(test.value);
+					auto answer = toBE(cast(uint)test.value);
 					assert(memcmp(&packer.buf[1], &answer, uint.sizeof) == 0);
 					break;
 				default:
-					auto answer = convertEndianTo!64(test.value);
+					auto answer = toBE(cast(ulong)test.value);
 					assert(memcmp(&packer.buf[1], &answer, ulong.sizeof) == 0);
 				}
 			}
 		}
 	}
 	{ // int *
-		static struct STest { ubyte format; long value; }
+		struct STest { ubyte format; long value; }
 
 		enum : long { A = byte.min, B = short.min, C = int.min, D = long.min }
 
@@ -464,19 +429,19 @@ unittest
 
 				switch (i) {
 				case 0:
-					auto answer = take8from!(T.sizeof * 8)(test.value);
+					auto answer = take8from(test.value);
 					assert(memcmp(&packer.buf[1], &answer, byte.sizeof) == 0);
 					break;
 				case 1:
-					auto answer = convertEndianTo!16(test.value);
+					auto answer = toBE(cast(ushort)test.value);
 					assert(memcmp(&packer.buf[1], &answer, short.sizeof) == 0);
 					break;
 				case 2:
-					auto answer = convertEndianTo!32(test.value);
+					auto answer = toBE(cast(uint)test.value);
 					assert(memcmp(&packer.buf[1], &answer, int.sizeof) == 0);
 					break;
 				default:
-					auto answer = convertEndianTo!64(test.value);
+					auto answer = toBE(cast(ulong)test.value);
 					assert(memcmp(&packer.buf[1], &answer, long.sizeof) == 0);
 				}
 			}
@@ -487,21 +452,20 @@ unittest // float, double
 {
 	static if ((real.sizeof == double.sizeof) || !EnableReal)
 	{
-		alias AliasSeq!(float, double, double) FloatingTypes;
-		static struct FTest { ubyte format; double value; }
+		alias FloatingTypes = AliasSeq!(float, double);
+		struct FTest { ubyte format; double value; }
 
-		static FTest[] ftests = [
+		enum FTest[] ftests = [
 			{Format.FLOAT,  float.min_normal},
-			{Format.DOUBLE, double.max},
 			{Format.DOUBLE, double.max},
 		];
 	}
 	else
 	{
-		alias AliasSeq!(float, double, real) FloatingTypes;
-		static struct FTest { ubyte format; real value; }
+		alias FloatingTypes = AliasSeq!(float, double, real);
+		struct FTest { ubyte format; real value; }
 
-		static FTest[] ftests = [
+		enum FTest[] ftests = [
 			{Format.FLOAT,  float.min_normal},
 			{Format.DOUBLE, double.max},
 			{Format.REAL,   real.max},
@@ -516,25 +480,25 @@ unittest // float, double
 
 		switch (I) {
 		case 0:
-			const answer = convertEndianTo!32(_f(cast(T)ftests[I].value).i);
+			const answer = toBE(cast(uint)_f(cast(T)ftests[I].value).i);
 			assert(memcmp(&packer.buf[1], &answer, float.sizeof) == 0);
 			break;
 		case 1:
-			const answer = convertEndianTo!64(_d(cast(T)ftests[I].value).i);
+			const answer = toBE(cast(ulong)_d(cast(T)ftests[I].value).i);
 			assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			break;
 		default:
 			static if (EnableReal)
 			{
 				const t = _r(cast(T)ftests[I].value);
-				const f = convertEndianTo!64(t.fraction);
-				const e = convertEndianTo!16(t.exponent);
+				const f = toBE(cast(ulong)t.fraction);
+				const e = toBE(cast(ushort)t.exponent);
 				assert(memcmp(&packer.buf[1],            &f, f.sizeof) == 0);
 				assert(memcmp(&packer.buf[1 + f.sizeof], &e, e.sizeof) == 0);
 			}
 			else
 			{
-				const answer = convertEndianTo!64(_d(cast(T)ftests[I].value).i);
+				const answer = toBE(cast(ulong)_d(cast(T)ftests[I].value).i);
 				assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			}
 		}
@@ -542,7 +506,7 @@ unittest // float, double
 }
 unittest // pointer
 {
-	static struct PTest
+	struct PTest
 	{
 		ubyte format;
 
@@ -556,29 +520,29 @@ unittest // pointer
 
 	PTest[] ptests = [PTest(Format.UINT64), PTest(Format.INT64), PTest(Format.DOUBLE)];
 
-	ulong  v0 = ulong.max;
-	long   v1 = long.min;
-	double v2 = double.max;
+	auto v0 = ulong.max;
+	auto v1 = long.min;
+	auto v2 = double.max;
 
-	foreach (I, Index; AliasSeq!("0", "1", "2")) {
+	foreach (I; AliasSeq!(0, 1, 2)) {
 		mixin DefinePacker;
 
-		mixin("ptests[I].p" ~ Index ~ " = &v" ~ Index ~ ";");
+		mixin("ptests[I].p", I, " = &v", I, ";");
 
-		packer.pack(mixin("ptests[I].p" ~ Index));
+		packer.pack(mixin("ptests[I].p", I));
 		assert(packer.buf[0] == ptests[I].format);
 
 		switch (I) {
 		case 0:
-			auto answer = convertEndianTo!64(*ptests[I].p0);
+			const answer = toBE(cast(ulong)*ptests[I].p0);
 			assert(memcmp(&packer.buf[1], &answer, ulong.sizeof) == 0);
 			break;
 		case 1:
-			auto answer = convertEndianTo!64(*ptests[I].p1);
+			const answer = toBE(cast(ulong)*ptests[I].p1);
 			assert(memcmp(&packer.buf[1], &answer, long.sizeof) == 0);
 			break;
 		default:
-			const answer = convertEndianTo!64(_d(*ptests[I].p2).i);
+			const answer = toBE(cast(ulong)_d(*ptests[I].p2).i);
 			assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 		}
 	}
@@ -602,23 +566,23 @@ unittest
 		mixin DefinePacker; E2 e = E2.A;
 
 		packer.pack(e);
-		assert(packer.buf[0] == (Format.RAW | 0x04));
+		assert(packer.buf[0] == (Format.STR | 0x04));
 	}
 }
 unittest
 {
 	// container
-	static struct CTest { ubyte format; size_t value; }
+	struct CTest { ubyte format; size_t value; }
 
 	enum : ulong { A = 16 / 2, B = ushort.max, C = uint.max }
 
 	enum CTest[][] ctests = [
 		[{Format.ARRAY | A, Format.ARRAY | A}, {Format.ARRAY16, B}, {Format.ARRAY32, C}],
 		[{Format.MAP   | A, Format.MAP   | A}, {Format.MAP16,   B}, {Format.MAP32,   C}],
-		[{Format.RAW   | A, Format.RAW   | A}, {Format.RAW16,   B}, {Format.RAW32,   C}],
+		[{Format.STR   | A, Format.STR   | A}, {Format.STR16,   B}, {Format.STR32,   C}],
 	];
 
-	foreach (I, Name; AliasSeq!("Array", "Map", "Raw")) {
+	foreach (I, Name; AliasSeq!("Array", "Map", "Str")) {
 		auto test = ctests[I];
 
 		foreach (i, T; AliasSeq!(ubyte, ushort, uint)) {
@@ -633,11 +597,11 @@ unittest
 				assert(memcmp(&packer.buf[0], &answer, ubyte.sizeof) == 0, Name);
 				break;
 			case 1:
-				auto answer = convertEndianTo!16(test[i].value);
+				auto answer = toBE(cast(ushort)test[i].value);
 				assert(memcmp(&packer.buf[1], &answer, ushort.sizeof) == 0, Name);
 				break;
 			default:
-				auto answer = convertEndianTo!32(test[i].value);
+				auto answer = toBE(cast(uint)test[i].value);
 				assert(memcmp(&packer.buf[1], &answer, uint.sizeof) == 0, Name);
 			}
 		}
@@ -696,7 +660,7 @@ unittest
 			assert(packer.buf.length == 4 + L, text(packer.buf.length));
 			assert(packer.buf[0] == Format.EXT16);
 
-			ushort l = convertEndianTo!16(L);
+			auto l = toBE(cast(ushort)L);
 			assert(memcmp(&packer.buf[1], &l, ushort.sizeof) == 0);
 			assert(packer.buf[3] == type);
 			assert(packer.buf[4 .. 4 + L] == data);
@@ -715,7 +679,7 @@ unittest
 			assert(packer.buf.length == 6 + L, text(packer.buf.length));
 			assert(packer.buf[0] == Format.EXT32);
 
-			uint l = convertEndianTo!32(L);
+			auto l = toBE(cast(uint)L);
 			assert(memcmp(&packer.buf[1], &l, uint.sizeof) == 0);
 			assert(packer.buf[5] == type);
 			assert(packer.buf[6 .. 6 + L] == data);

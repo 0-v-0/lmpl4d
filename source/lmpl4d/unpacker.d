@@ -491,29 +491,29 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 		return true;
 	}
 
-	size_t begin(int s1 = 0xa0, int s2 = 0xbf, Format f = Format.ARRAY16)() nothrow
+	size_t begin(Format f1 = Format.STR, size_t llen = 32, Format f2 = Format.ARRAY16)() nothrow
 	{
-		enum Raw = s1 == 0xa0 && s2 == 0xbf;
+		enum Raw = f1 == Format.STR || (Format.BIN8 <= f1 && f1 <= Format.BIN32);
 		if(!canRead) return 0;
 		int header = read();
 
-		if (s1 <= header && header <= s2)
-			return header & (s2 - s1);
+		if (f1 <= header && header < (f1 + llen))
+			return header & (llen - 1);
 		switch (header) {
 			static if(Raw) {
 				case Format.BIN8, Format.STR8:
 				if(!canRead(ubyte.sizeof)) return 0;
 				return read();
-				case Format.BIN16, Format.RAW16:
+				case Format.BIN16, Format.STR16:
 			} else {
-				case f:
+				case f2:
 			}
 			if(!canRead(ushort.sizeof)) return 0;
 			return load!ushort(read(ushort.sizeof));
 			static if(Raw) {
-				case Format.BIN32, Format.RAW32:
+				case Format.BIN32, Format.STR32:
 			} else {
-				case cast(Format)(f + 1):
+				case cast(Format)(f2 + 1):
 			}
 			if(!canRead(uint.sizeof)) return 0;
 			return load!uint(read(uint.sizeof));
@@ -523,7 +523,7 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 			pos--;
 			import std.conv: text;
 			assert(0, text("Attempt to unpack with non-compatible type: expected = ",
-				f.stringof, ", got = ", header));
+				f2.stringof, ", got = ", header));
 		}
 	}
 
@@ -531,6 +531,7 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 	 * Deserializes type-information of raw type.
 	 */
 	alias beginRaw = begin!();
+
 	/**
 	 * Deserializes the type-information of container.
 	 *
@@ -540,10 +541,10 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 	 * Returns:
 	 *  the container size.
 	 */
-	alias beginArray = begin!(0x90, 0x9f);
+	alias beginArray = begin!(Format.ARRAY, 16);
 
 	/// ditto
-	alias beginMap = begin!(0x80, 0x8f, Format.MAP16);
+	alias beginMap = begin!(Format.MAP, 16, Format.MAP16);
 
 	version(NoPackingStruct) {}
 	else {
@@ -711,14 +712,7 @@ struct Unpacker(Stream = const(ubyte)[]) if(isInputBuffer!(Stream, ubyte))
 	 */
 	package T load(T)(in ubyte[] buf)
 	{
-		static if (isIntegral!T && T.sizeof == 2)
-			enum bit = 16;
-		else static if (isIntegral!T && T.sizeof == 4)
-			enum bit = 32;
-		else static if (isIntegral!T && T.sizeof == 8)
-			enum bit = 64;
-		else static assert(0, "Unsupported type");
-		return convertEndianTo!bit(*cast(const T*)buf.ptr);
+		return toBE(*cast(const T*)buf.ptr);
 	}
 }
 

@@ -16,7 +16,7 @@ else
 
 version(NoPackingStruct) {}
 else {
-	struct nonPacked {}
+	struct nonPacked {} // @suppress(dscanner.style.phobos_naming_convention)
 
 	package enum isPackedField(alias field) = staticIndexOf!(nonPacked, __traits(getAttributes, field)) == -1
 		&& !isSomeFunction!(typeof(field));
@@ -95,101 +95,40 @@ void fillData(T)(ref T data)
 
 public:
 
-version (LittleEndian)
+T toBE(T)(in T value) @trusted if(isIntegral!T && T.sizeof > 1)
 {
-	/*
-	 * Converts $(value) to different Endian.
-	 *
-	 * Params:
-	 *  value = the LittleEndian value to convert.
-	 *
-	 * Returns:
-	 *  the converted value.
-	 */
-	@trusted
-	ushort convertEndianTo(size_t Bit, T)(in T value) if (Bit == 16)
-	{
-		return byteswap(cast(ushort)value);
-	}
-
-	// ditto
-	@trusted
-	uint convertEndianTo(size_t Bit, T)(in T value) if (Bit == 32)
-	{
-		return bswap(cast(uint)value);
-	}
-
-	// ditto
-	@trusted
-	ulong convertEndianTo(size_t Bit, T)(in T value) if (Bit == 64)
-	{
-		return bswap(value);
-	}
-
-	unittest
-	{
-		assert(convertEndianTo!16(0x0123)             == 0x2301);
-		assert(convertEndianTo!32(0x01234567)         == 0x67452301);
-		assert(convertEndianTo!64(0x0123456789abcdef) == 0xefcdab8967452301);
-	}
-
-	/*
-	 * Comapatible for BigEndian environment.
-	 */
-	ubyte take8from(size_t bit = 8, T)(T value)
-	if (bit == 8 || bit == 16 || bit == 32 || bit == 64)
-	{
-		return (cast(ubyte*)&value)[0];
-	}
-}
-else
-{
-	/*
-	 * Comapatible for LittleEndian environment.
-	 */
-	@safe
-	ushort convertEndianTo(size_t bit, T)(in T value)
-	if (bit == 16 || bit == 32 || bit == 64)
-	{
-		static if (bit == 16)
-			alias U = ushort;
-		else static if (bit == 32)
-			alias U = uint;
+	version (LittleEndian) {
+		static if (T.sizeof == 2)
+			return byteswap(value);
+		else static if (T.sizeof == 4)
+			return bswap(cast(uint)value);
 		else
-			alias U = ulong;
-		return cast(U)value;
-	}
+			return bswap(value);
+	} else
+		return value;
+}
 
-	unittest
-	{
-		assert(convertEndianTo!16(0x0123)       == 0x0123);
-		assert(convertEndianTo!32(0x01234567)   == 0x01234567);
-		assert(convertEndianTo!64(0x0123456789) == 0x0123456789);
-	}
-
-	/*
-	 * Takes 8bit from $(D_PARAM value)
-	 *
-	 * Params:
-	 *  value = the content to take.
-	 *
-	 * Returns:
-	 *  the 8bit value corresponding $(D_PARAM bit) width.
-	 */
-	ubyte take8from(size_t bit = 8, T)(T value)
-	if (bit == 8 || bit == 16 || bit == 32 || bit == 64)
-	{
-		return (cast(ubyte*)&value)[(bit >> 3) - 1];
-	}
+/*
+* Takes 8bit from $(D_PARAM value)
+*
+* Params:
+*  value = the content to take.
+*
+* Returns:
+*  the 8bit value corresponding $(D_PARAM bit) width.
+*/
+ubyte take8from(T)(T value)
+{
+	return cast(ubyte)value;
 }
 
 unittest
 {
 	foreach (Int; AliasSeq!(ubyte, ushort, uint, ulong)) {
-		assert(take8from!8 (cast(Int)0x01)               == 0x01);
-		assert(take8from!16(cast(Int)0x0123)             == 0x23);
-		assert(take8from!32(cast(Int)0x01234567)         == 0x67);
-		assert(take8from!64(cast(Int)0x0123456789abcdef) == 0xef);
+		assert(take8from(cast(Int)0x01)               == 0x01);
+		assert(take8from(cast(Int)0x0123)             == 0x23);
+		assert(take8from(cast(Int)0x01234567)         == 0x67);
+		assert(take8from(cast(Int)0x0123456789abcdef) == 0xef);
 	}
 }
 
@@ -262,11 +201,6 @@ enum Format : ubyte
 	FLOAT  = 0xca,  // float
 	DOUBLE = 0xcb,  // double
 
-	// raw byte
-	RAW   = 0xa0,
-	RAW16 = 0xda,
-	RAW32 = 0xdb,
-
 	// bin type
 	BIN8  = 0xc4,
 	BIN16 = 0xc5,
@@ -279,9 +213,10 @@ enum Format : ubyte
 	EXT32 = 0xc9,
 
 	// str type
+	STR = 0xa0,
 	STR8  = 0xd9,
-	//STR16 = 0xda,
-	//STR32 = 0xdb,
+	STR16 = 0xda,
+	STR32 = 0xdb,
 
 	// array
 	ARRAY   = 0x90,
@@ -323,14 +258,14 @@ struct AOutputBuf(Stream, T = ubyte) if(isOutputBuffer!(Stream, T))
 
 	ref const(Stream) opOpAssign(string op : "~")(inout(T[]) rhs) {
 		buf.reserve(buf.length + rhs.length);
-		foreach(ref elem; rhs)
+		foreach(elem; rhs)
 			this ~= elem;
 		return buf;
 	}
 
-	ref const(Stream) opOpAssign(string op : "~", U)(U rhs) if(!isDynamicArray!U) {
+	ref const(Stream) opOpAssign(string op : "~", U)(in U rhs) if(!isDynamicArray!U) {
 		static if (isPointer!Stream)
-			size_t sz = 0;
+			size_t sz;
 		else
 			size_t sz = buf.length;
 		static if (__traits(compiles, buf.length = buf.length + 1))
