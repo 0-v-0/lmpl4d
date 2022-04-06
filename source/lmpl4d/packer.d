@@ -2,16 +2,16 @@ module lmpl4d.packer;
 
 import lmpl4d.common;
 
-struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
-{
+struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	AOutputBuf!Stream buf;
 
-	@property auto opSlice() { return buf[]; }
+	@property auto opSlice() {
+		return buf[];
+	}
 
 	alias TThis = typeof(this);
 
-	this(ref Stream stream)
-	{
+	this(ref Stream stream) {
 		buf = AOutputBuf!Stream(stream);
 	}
 
@@ -38,15 +38,13 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	 * Returns:
 	 *  self, i.e. for method chaining.
 	 */
-	ref TThis pack(T)(in T value) if (is(Unqual!T == bool))
-	{
+	ref TThis pack(T)(in T value) if (is(Unqual!T == bool)) {
 		buf ~= value ? Format.TRUE : Format.FALSE;
 		return this;
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isUnsigned!T && !is(Unqual!T == enum))
-	{
+	ref TThis pack(T)(in T value) if (isUnsigned!T && !is(Unqual!T == enum)) {
 		if (value < (1 << 8)) {
 			if (value < (1 << 7)) {
 				// fixnum
@@ -58,10 +56,9 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		} else if (value < (1 << 16)) {
 			buf ~= Format.UINT16;
 			buf ~= toBE(cast(ushort)value);
-		} else
-			// ulong < ulong is slower than uint < uint
+		} else // ulong < ulong is slower than uint < uint
 			static if (T.sizeof == 8) {
-				if (value < (1UL << 32)){
+				if (value < (1UL << 32)) {
 					buf ~= Format.UINT32;
 					buf ~= toBE(cast(uint)value);
 				} else {
@@ -76,8 +73,8 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isSigned!T && isIntegral!T && !is(Unqual!T == enum))
-	{
+	ref TThis pack(T)(in T value)
+	if (isSigned!T && isIntegral!T && !is(Unqual!T == enum)) {
 		if (value < -(1 << 5)) {
 			if (value < -(1 << 15)) {
 				static if (T.sizeof == 8) {
@@ -99,42 +96,40 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		} else if (value < (1 << 7)) {
 			// fixnum
 			buf ~= take8from(value);
-		} else
-			static if (T.sizeof == 8) {
-				if (value < (1L << 16)) {
-					if (value < (1L << 8)) {
-						buf ~= Format.UINT8;
-						buf ~= take8from(value);
-					} else {
-						buf ~= Format.UINT16;
-						buf ~= toBE(cast(ushort)value);
-					}
-				} else if (value < (1L << 32)) {
-					buf ~= Format.UINT32;
-					buf ~= toBE(cast(uint)value);
-				} else {
-					buf ~= Format.UINT64;
-					buf ~= toBE(cast(ulong)value);
-				}
-			} else {
-				if (value < (1 << 8)) {
+		} else static if (T.sizeof == 8) {
+			if (value < (1L << 16)) {
+				if (value < (1L << 8)) {
 					buf ~= Format.UINT8;
 					buf ~= take8from(value);
-				} else if (value < (1 << 16)) {
+				} else {
 					buf ~= Format.UINT16;
 					buf ~= toBE(cast(ushort)value);
-				} else {
-					buf ~= Format.UINT32;
-					buf ~= toBE(cast(uint)value);
 				}
+			} else if (value < (1L << 32)) {
+				buf ~= Format.UINT32;
+				buf ~= toBE(cast(uint)value);
+			} else {
+				buf ~= Format.UINT64;
+				buf ~= toBE(cast(ulong)value);
 			}
+		} else {
+			if (value < (1 << 8)) {
+				buf ~= Format.UINT8;
+				buf ~= take8from(value);
+			} else if (value < (1 << 16)) {
+				buf ~= Format.UINT16;
+				buf ~= toBE(cast(ushort)value);
+			} else {
+				buf ~= Format.UINT32;
+				buf ~= toBE(cast(uint)value);
+			}
+		}
 
 		return this;
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isFloatingPoint!T && !is(Unqual!T == enum))
-	{
+	ref TThis pack(T)(in T value) if (isFloatingPoint!T && !is(Unqual!T == enum)) {
 		static if (is(Unqual!T == float)) {
 			buf ~= Format.FLOAT;
 			buf ~= toBE(cast(uint)_f(value).i);
@@ -152,8 +147,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		return this;
 	}
 
-	ref TThis pack(T)(in T value) if (is(Unqual!T == enum))
-	{
+	ref TThis pack(T)(in T value) if (is(Unqual!T == enum)) {
 		pack(cast(OriginalType!T)value);
 		return this;
 	}
@@ -161,14 +155,12 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	/*
 	 * Serializes the nil value.
 	*/
-	ref TThis pack(T)(in T) if (is(Unqual!T == typeof(null)))
-	{
+	ref TThis pack(T)(in T) if (is(Unqual!T == typeof(null))) {
 		buf ~= Format.NIL;
 		return this;
 	}
 
-	ref TThis pack(T)(in T value) if (isPointer!T)
-	{
+	ref TThis pack(T)(in T value) if (isPointer!T) {
 		if (value is null)
 			buf ~= Format.NIL;
 		else
@@ -177,8 +169,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T array) if (isSomeArray!T)
-	{
+	ref TThis pack(T)(in T array) if (isSomeArray!T) {
 		import std.range;
 
 		if (array.empty)
@@ -202,8 +193,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T array) if (isAssociativeArray!T)
-	{
+	ref TThis pack(T)(in T array) if (isAssociativeArray!T) {
 		if (!array)
 			return pack(null);
 
@@ -217,8 +207,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis pack(Types...)(auto ref const Types objects) if (Types.length > 1)
-	{
+	ref TThis pack(Types...)(auto ref const Types objects) if (Types.length > 1) {
 		foreach (i, T; Types)
 			pack(objects[i]);
 
@@ -226,8 +215,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isSomeChar!T && !is(Unqual!T == enum))
-	{
+	ref TThis pack(T)(in T value) if (isSomeChar!T && !is(Unqual!T == enum)) {
 		static if (T.sizeof == 1)
 			return pack(cast(ubyte)value);
 		else static if (T.sizeof == 2)
@@ -236,8 +224,8 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 			return pack(cast(uint)value);
 	}
 
-	version(NoPackingStruct) {}
-	else {
+	version (NoPackingStruct) {
+	} else {
 		ref TThis pack(T)(in T obj) if (is(Unqual!T == struct)) {
 			if (T.init == obj) {
 				beginArray(0);
@@ -267,8 +255,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	 * Returns:
 	 *  self, i.e. for method chaining.
 	 */
-	ref TThis packArray(Types...)(auto ref const Types objects)
-	{
+	ref TThis packArray(Types...)(auto ref const Types objects) {
 		beginArray(Types.length);
 		foreach (i, T; Types)
 			pack(objects[i]);
@@ -279,7 +266,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 
 	/// ditto
 	ref TThis packMap(Types...)(auto ref const Types objects)
-	if((Types.length & 1) == 0) {
+	if ((Types.length & 1) == 0) {
 		beginMap(Types.length >> 1);
 		foreach (i, T; Types)
 			pack(objects[i]);
@@ -288,9 +275,8 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	}
 
 	ref TThis packExt(in byte type, const ubyte[] data) return
-	in(data.length <= uint.max) {
-		ref TThis packExtFixed(int fmt)
-		{
+	in (data.length <= uint.max) {
+		ref TThis packExtFixed(int fmt) {
 			buf ~= cast(ubyte)fmt;
 			buf ~= type;
 			buf ~= data;
@@ -299,12 +285,18 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 
 		// Try packing to a fixed-length type
 		switch (data.length) {
-			case 1: return packExtFixed(Format.EXT    );
-			case 2: return packExtFixed(Format.EXT + 1);
-			case 4: return packExtFixed(Format.EXT + 2);
-			case 8: return packExtFixed(Format.EXT + 3);
-			case 16:return packExtFixed(Format.EXT + 4);
-			default: break;
+		case 1:
+			return packExtFixed(Format.EXT);
+		case 2:
+			return packExtFixed(Format.EXT + 1);
+		case 4:
+			return packExtFixed(Format.EXT + 2);
+		case 8:
+			return packExtFixed(Format.EXT + 3);
+		case 16:
+			return packExtFixed(Format.EXT + 4);
+		default:
+			break;
 		}
 
 		begin!(Format.EXT8, Format.EXT16, 0)(data.length);
@@ -314,8 +306,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 		return this;
 	}
 
-	ref TThis begin(Format f, Format f16, size_t llen = 16)(size_t len) return
-	{
+	ref TThis begin(Format f, Format f16, size_t llen = 16)(size_t len) return {
 		if (len <= ushort.max) {
 			static if (llen) {
 				if (len < llen) {
@@ -358,7 +349,7 @@ struct Packer(Stream = ubyte[]) if(isOutputBuffer!(Stream, ubyte))
 	alias beginMap = begin!(Format.MAP, Format.MAP16);
 }
 
-unittest // unique value
+unittest  // unique value
 {
 	mixin DefinePacker;
 
@@ -367,8 +358,8 @@ unittest // unique value
 	packer.pack(null, true, false);
 	assert(packer[] == result);
 }
-unittest
-{
+// dfmt off
+unittest {
 	{ // uint *
 		struct UTest { ubyte format; ulong value; }
 
@@ -448,28 +439,26 @@ unittest
 		}
 	}
 }
-unittest // float, double
+
+unittest  // float, double
 {
-	static if ((real.sizeof == double.sizeof) || !EnableReal)
-	{
+	static if ((real.sizeof == double.sizeof) || !EnableReal) {
 		alias FloatingTypes = AliasSeq!(float, double);
 		struct FTest { ubyte format; double value; }
 
 		enum FTest[] ftests = [
-			{Format.FLOAT,  float.min_normal},
-			{Format.DOUBLE, double.max},
-		];
-	}
-	else
-	{
+				{Format.FLOAT, float.min_normal},
+				{Format.DOUBLE, double.max},
+			];
+	} else {
 		alias FloatingTypes = AliasSeq!(float, double, real);
 		struct FTest { ubyte format; real value; }
 
 		enum FTest[] ftests = [
-			{Format.FLOAT,  float.min_normal},
-			{Format.DOUBLE, double.max},
-			{Format.REAL,   real.max},
-		];
+				{Format.FLOAT, float.min_normal},
+				{Format.DOUBLE, double.max},
+				{Format.REAL, real.max},
+			];
 	}
 
 	foreach (I, T; FloatingTypes) {
@@ -488,32 +477,28 @@ unittest // float, double
 			assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			break;
 		default:
-			static if (EnableReal)
-			{
+			static if (EnableReal) {
 				const t = _r(cast(T)ftests[I].value);
 				const f = toBE(cast(ulong)t.fraction);
 				const e = toBE(cast(ushort)t.exponent);
-				assert(memcmp(&packer.buf[1],            &f, f.sizeof) == 0);
+				assert(memcmp(&packer.buf[1], &f, f.sizeof) == 0);
 				assert(memcmp(&packer.buf[1 + f.sizeof], &e, e.sizeof) == 0);
-			}
-			else
-			{
+			} else {
 				const answer = toBE(cast(ulong)_d(cast(T)ftests[I].value).i);
 				assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			}
 		}
 	}
 }
-unittest // pointer
+
+unittest  // pointer
 {
-	struct PTest
-	{
+	struct PTest {
 		ubyte format;
 
-		union
-		{
-			ulong*  p0;
-			long*   p1;
+		union {
+			ulong* p0;
+			long* p1;
 			double* p2;
 		}
 	}
@@ -547,12 +532,13 @@ unittest // pointer
 		}
 	}
 }
-unittest
-{
+
+unittest {
 	{ // enum
 		enum E : ubyte { A = ubyte.max }
 
-		mixin DefinePacker; E e = E.A;
+		mixin DefinePacker;
+		E e = E.A;
 
 		packer.pack(e);
 		assert(packer.buf[0] == Format.UINT8);
@@ -563,14 +549,15 @@ unittest
 	{ // enum with string
 		enum E2 : string { A = "test" }
 
-		mixin DefinePacker; E2 e = E2.A;
+		mixin DefinePacker;
+		E2 e = E2.A;
 
 		packer.pack(e);
 		assert(packer.buf[0] == (Format.STR | 0x04));
 	}
 }
-unittest
-{
+
+unittest {
 	// container
 	struct CTest { ubyte format; size_t value; }
 
@@ -580,7 +567,7 @@ unittest
 		[{Format.ARRAY | A, Format.ARRAY | A}, {Format.ARRAY16, B}, {Format.ARRAY32, C}],
 		[{Format.MAP   | A, Format.MAP   | A}, {Format.MAP16,   B}, {Format.MAP32,   C}],
 		[{Format.STR   | A, Format.STR   | A}, {Format.STR16,   B}, {Format.STR32,   C}],
-	];
+		];
 
 	foreach (I, Name; AliasSeq!("Array", "Map", "Str")) {
 		auto test = ctests[I];
@@ -606,83 +593,97 @@ unittest
 			}
 		}
 	}
-	{ // ext types
-		import std.conv : text;
 
-		byte type = 7; // an arbitrary type value
 
-		// fixexts
-		{
-			ubyte[16] data = void;
-			data.fillData;
-			foreach (L; AliasSeq!(1, 2, 4, 8, 16))
-			{
-				mixin DefinePacker;
-				packer.packExt(type, data[0 .. L]);
 
-				// format, type, data
-				assert(packer.buf.length == 2 + L);
-				const l = 1 << (packer.buf[0] - Format.EXT);
-				assert(l == L);
-				assert(packer.buf[1] == type);
-				assert(packer.buf[2 .. 2+l] == data[0 .. L]);
-			}
-		}
 
-		ubyte[] data;
-		// ext8
-		foreach (L; AliasSeq!(3, 7, 255))
-		{
-			data = new ubyte[L];
-			data.fillData;
 
+
+
+
+
+
+
+
+
+
+
+
+
+// dfmt on
+{ // ext types
+	import std.conv : text;
+
+	byte type = 7; // an arbitrary type value
+
+	// fixexts
+	{
+		ubyte[16] data = void;
+		data.fillData;
+		foreach (L; AliasSeq!(1, 2, 4, 8, 16)) {
 			mixin DefinePacker;
 			packer.packExt(type, data[0 .. L]);
 
-			// format, length, type, data
-			assert(packer.buf.length == 3 + L);
-			assert(packer.buf[0] == Format.EXT8);
-			assert(packer.buf[1] == L);
-			assert(packer.buf[2] == type);
-			assert(packer.buf[3 .. 3 + L] == data);
-		}
-
-		// ext16
-		foreach (L; AliasSeq!(256, 0xffff))
-		{
-			data = new ubyte[L];
-			data.fillData;
-
-			mixin DefinePacker;
-			packer.packExt(type, data[0 .. L]);
-
-			// format, length, type, data
-			assert(packer.buf.length == 4 + L, text(packer.buf.length));
-			assert(packer.buf[0] == Format.EXT16);
-
-			auto l = toBE(cast(ushort)L);
-			assert(memcmp(&packer.buf[1], &l, ushort.sizeof) == 0);
-			assert(packer.buf[3] == type);
-			assert(packer.buf[4 .. 4 + L] == data);
-		}
-
-		// ext32
-		foreach (L; AliasSeq!(2^^16, 2^^17))
-		{
-			data = new ubyte[L];
-			data.fillData;
-
-			mixin DefinePacker;
-			packer.packExt(type, data[0 .. L]);
-
-			// format, length, type, data
-			assert(packer.buf.length == 6 + L, text(packer.buf.length));
-			assert(packer.buf[0] == Format.EXT32);
-
-			auto l = toBE(cast(uint)L);
-			assert(memcmp(&packer.buf[1], &l, uint.sizeof) == 0);
-			assert(packer.buf[5] == type);
-			assert(packer.buf[6 .. 6 + L] == data);
+			// format, type, data
+			assert(packer.buf.length == 2 + L);
+			const l = 1 << (packer.buf[0] - Format.EXT);
+			assert(l == L);
+			assert(packer.buf[1] == type);
+			assert(packer.buf[2 .. 2 + l] == data[0 .. L]);
 		}
 	}
+
+	ubyte[] data;
+	// ext8
+	foreach (L; AliasSeq!(3, 7, 255)) {
+		data = new ubyte[L];
+		data.fillData;
+
+		mixin DefinePacker;
+		packer.packExt(type, data[0 .. L]);
+
+		// format, length, type, data
+		assert(packer.buf.length == 3 + L);
+		assert(packer.buf[0] == Format.EXT8);
+		assert(packer.buf[1] == L);
+		assert(packer.buf[2] == type);
+		assert(packer.buf[3 .. 3 + L] == data);
+	}
+
+	// ext16
+	foreach (L; AliasSeq!(256, 0xffff)) {
+		data = new ubyte[L];
+		data.fillData;
+
+		mixin DefinePacker;
+		packer.packExt(type, data[0 .. L]);
+
+		// format, length, type, data
+		assert(packer.buf.length == 4 + L, text(packer.buf.length));
+		assert(packer.buf[0] == Format.EXT16);
+
+		auto l = toBE(cast(ushort)L);
+		assert(memcmp(&packer.buf[1], &l, ushort.sizeof) == 0);
+		assert(packer.buf[3] == type);
+		assert(packer.buf[4 .. 4 + L] == data);
+	}
+
+	// ext32
+	foreach (L; AliasSeq!(2 ^^ 16, 2 ^^ 17)) {
+		data = new ubyte[L];
+		data.fillData;
+
+		mixin DefinePacker;
+		packer.packExt(type, data[0 .. L]);
+
+		// format, length, type, data
+		assert(packer.buf.length == 6 + L, text(packer.buf.length));
+		assert(packer.buf[0] == Format.EXT32);
+
+		auto l = toBE(cast(uint)L);
+		assert(memcmp(&packer.buf[1], &l, uint.sizeof) == 0);
+		assert(packer.buf[5] == type);
+		assert(packer.buf[6 .. 6 + L] == data);
+	}
+}
 }
