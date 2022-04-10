@@ -306,7 +306,8 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		return this;
 	}
 
-	ref TThis begin(Format f, Format f16, size_t llen = 16)(size_t len) return {
+	ref TThis begin(Format f, Format f16, size_t llen = 16)(size_t len)
+	in (len <= uint.max, "Data is too large to pack") {
 		if (len <= ushort.max) {
 			static if (llen) {
 				if (len < llen) {
@@ -324,9 +325,6 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 			buf ~= f16;
 			buf ~= toBE(cast(ushort)len);
 		} else {
-			if (len > uint.max)
-				throw new Exception("Data is too large to pack");
-
 			buf ~= cast(Format)(f16 + 1);
 			buf ~= toBE(cast(uint)len);
 		}
@@ -440,8 +438,7 @@ unittest {
 	}
 }
 
-unittest  // float, double
-{
+unittest { // float, double
 	static if ((real.sizeof == double.sizeof) || !EnableReal) {
 		alias FloatingTypes = AliasSeq!(float, double);
 		struct FTest { ubyte format; double value; }
@@ -593,20 +590,6 @@ unittest {
 			}
 		}
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

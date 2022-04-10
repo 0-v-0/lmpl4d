@@ -161,8 +161,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 
 	T unpack(T)(T defValue) nothrow
 
-	
-
 	if (is(Unqual!T == enum) || isPointer!T || isTuple!T || isSomeChar!T || isNumeric!T || is(
 			Unqual!T == bool)) {
 		static if (is(Unqual!T == enum))
