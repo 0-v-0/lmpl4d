@@ -383,9 +383,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 		if (length == 0)
 			return true;
-		static if (!isStaticArray!T)
-			if (array.length != length)
-				array = uninitializedArray!T(length);
 		static if (RawBytes) {
 			auto offset = calculateSize!(true)(length);
 			if (!canRead(length + offset)) {
@@ -396,9 +393,13 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 				array = (cast(U[])read(length))[0 .. T.length];
 			else
 				array = cast(T)read(length);
-		} else
+		} else {
+			static if (!isStaticArray!T)
+				if (array.length != length)
+					array = uninitializedArray!T(length);
 			foreach (ref a; array)
 				a = unpack!U;
+		}
 		return true;
 	}
 
