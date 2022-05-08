@@ -160,7 +160,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	T unpack(T)(T defValue) nothrow
-
 	if (is(Unqual!T == enum) || isPointer!T || isTuple!T || isSomeChar!T || isNumeric!T || is(
 			Unqual!T == bool)) {
 		static if (is(Unqual!T == enum))
@@ -181,6 +180,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		else static if (isNumeric!T || is(Unqual!T == bool)) {
 			if (!canRead)
 				return defValue;
+			const spos = pos;
 			int header = read();
 			static if (isIntegral!T) {
 				if (header <= 0x7f)
@@ -293,6 +293,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 					}
 				}
 			default:
+				pos = spos;
 				return defValue;
 			}
 		}
@@ -319,9 +320,12 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		alias U = typeof(T.init[0]);
 		enum RawBytes = isRawByte!U;
 		static if (RawBytes)
-			auto length = beginRaw();
+			long length = beginRaw();
 		else
-			auto length = beginArray();
+			long length = beginArray();
+		if (length < 0)
+			throw new MessagePackException(
+				"Attempt to unpack with non-compatible type: expected = array");
 		version (betterC) {
 		} else {
 			static if (__traits(compiles, buf.length))
@@ -365,14 +369,13 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			else
 				return unpackNil(array);
 		}
-		if (!canRead)
-			return false;
-
 		enum RawBytes = isRawByte!U;
 		static if (RawBytes)
-			auto length = beginRaw();
+			long length = beginRaw();
 		else
-			auto length = beginArray();
+			long length = beginArray();
+		if (length < 0)
+			return false;
 		version (betterC) {
 		} else {
 			static if (__traits(compiles, buf.length))
@@ -412,7 +415,10 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (unpackNil(array))
 			return array;
 
-		auto length = beginMap();
+		long length = beginMap();
+		if (length < 0)
+			throw new MessagePackException(
+				"Attempt to unpack with non-compatible type: expected = map");
 		if (length == 0)
 			return array;
 
@@ -438,18 +444,18 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	 * Returns: true if succeed
 	 */
 	bool unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1) {
-		auto length = beginArray();
 		const spos = pos;
+		long length = beginArray();
 		if (length != Types.length) {
-			//the number of deserialized objects is mismatched
+			// the number of deserialized objects is mismatched
 			pos = spos;
 			return false;
 		}
 
 		foreach (i, T; Types)
-			try {
+			try
 				objects[i] = unpack!T;
-			} catch (Exception e) {
+			catch (Exception e) {
 				pos = spos;
 				return false;
 			}
@@ -462,8 +468,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	bool unpackMap(Types...)(ref Types objects) nothrow if (Types.length > 1) {
 		static assert(Types.length % 2 == 0, "The number of arguments must be even");
 
-		auto length = beginMap();
 		const spos = pos;
+		long length = beginMap();
 		if (length != Types.length >> 1) {
 			// the number of deserialized objects is mismatched
 			pos = spos;
@@ -471,9 +477,9 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 
 		foreach (i, T; Types)
-			try {
+			try
 				objects[i] = unpack!T;
-			} catch (Exception e) {
+			catch (Exception e) {
 				pos = spos;
 				return false;
 			}
@@ -486,59 +492,57 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (unpackNil(array))
 			return true;
 
-		auto length = beginMap();
+		long length = beginMap();
 		if (length == 0)
 			return true;
+		if (length < 0)
+			return false;
 
 		foreach (i; 0 .. length) {
 			try {
 				K k = unpack!K;
 				array[k] = unpack!V;
-			} catch (Exception e) {
+			} catch (Exception)
 				return false;
-			}
 		}
 
 		return true;
 	}
 
-	size_t begin(Format f1 = Format.STR, size_t llen = 32, Format f2 = Format.ARRAY16)() nothrow {
+	long begin(Format f1 = Format.STR, size_t llen = 32, Format f2 = Format.ARRAY16)() nothrow {
 		enum Raw = f1 == Format.STR || (Format.BIN8 <= f1 && f1 <= Format.BIN32);
 		if (!canRead)
-			return 0;
+			return -1;
 		int header = read();
 
-		if (f1 <= header && header < (f1 + llen))
+		if (f1 <= header && header < f1 + llen)
 			return header & (llen - 1);
 		switch (header) {
 			static if (Raw) {
 		case Format.BIN8, Format.STR8:
-				if (!canRead(ubyte.sizeof))
-					return 0;
-				return read();
+				if (canRead(ubyte.sizeof))
+					return read();
+				return 0;
 		case Format.BIN16, Format.STR16:
 			} else {
 		case f2:
 			}
-			if (!canRead(ushort.sizeof))
-				return 0;
-			return load!ushort(read(ushort.sizeof));
+			if (canRead(ushort.sizeof))
+				return load!ushort(read(ushort.sizeof));
+			return 0;
 			static if (Raw) {
 		case Format.BIN32, Format.STR32:
 			} else {
 		case cast(Format)(f2 + 1):
 			}
-			if (!canRead(uint.sizeof))
-				return 0;
-			return load!uint(read(uint.sizeof));
+			if (canRead(uint.sizeof))
+				return load!uint(read(uint.sizeof));
+			return 0;
 		case Format.NIL:
 			return 0;
 		default:
 			pos--;
-			import std.conv : text;
-
-			assert(0, text("Attempt to unpack with non-compatible type: expected = ",
-					f2.stringof, ", got = ", header));
+			return -1;
 		}
 	}
 
@@ -565,7 +569,11 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	} else {
 		T unpack(T)() if (is(Unqual!T == struct)) {
 			T val;
-			if (auto len = beginArray()) {
+			long len = beginArray();
+			if (len < 0)
+				throw new MessagePackException(
+					"Attempt to unpack with non-compatible type: expected = array");
+			if (len > 0) {
 				if (len != NumOfSerializingMembers!T)
 					rollback(calculateSize(len), "the number of struct fields is mismatched");
 
@@ -577,9 +585,11 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 
 		bool unpackObj(T)(ref T obj) if (is(Unqual!T == struct)) {
-			auto len = beginArray();
+			long len = beginArray();
 			if (len == 0)
 				return true;
+			if (len < 0)
+				return false;
 			if (len != NumOfSerializingMembers!T) {
 				pos -= calculateSize(len) + 1;
 				return false; // the number of struct fields is mismatched
