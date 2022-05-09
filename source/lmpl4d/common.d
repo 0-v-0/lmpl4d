@@ -243,9 +243,8 @@ enum Format : ubyte {
 /*
  * Calculates the format size of container length.
  */
-size_t calculateSize(bool rawType = false)(in size_t length) {
-	enum S = rawType ? 32 : 16;
-	return length < S ? 0 : length <= ushort.max ? ushort.sizeof : uint.sizeof;
+size_t calculateSize(in size_t length) {
+	return length < 16 ? 0 : length <= ushort.max ? ushort.sizeof : uint.sizeof;
 }
 
 /// Adaptive Output Buffer

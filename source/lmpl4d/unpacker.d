@@ -39,6 +39,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 				static if (isIntegral!T) {
 					if (header <= 0x7f)
 						return cast(T)header;
+					if (0xe0 <= header && header <= 0xff)
+						return cast(byte)header;
 				}
 				switch (header) {
 					static if (is(Unqual!T == bool)) {
@@ -185,6 +187,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			static if (isIntegral!T) {
 				if (header <= 0x7f)
 					return cast(T)header;
+				if (0xe0 <= header && header <= 0xff)
+					return cast(byte)header;
 			}
 			switch (header) {
 				static if (is(Unqual!T == bool)) {
@@ -325,7 +329,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			long length = beginArray();
 		if (length < 0)
 			throw new MessagePackException(
-				"Attempt to unpack with non-compatible type: expected = array");
+				"Attempt to unpack with non-compatible type or buffer is insufficient: expected = array");
 		version (betterC) {
 		} else {
 			static if (__traits(compiles, buf.length))
@@ -346,8 +350,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (length == 0)
 			return array;
 		static if (RawBytes) {
-			auto offset = calculateSize!(true)(length);
-			check(length + offset);
+			check(length);
 			static if (isStaticArray!T)
 				array = (cast(U[])read(length))[0 .. T.length];
 			else
@@ -387,8 +390,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (length == 0)
 			return true;
 		static if (RawBytes) {
-			auto offset = calculateSize!(true)(length);
-			if (!canRead(length + offset)) {
+			if (!canRead(length)) {
 				pos = spos;
 				return false;
 			}
@@ -522,14 +524,14 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		case Format.BIN8, Format.STR8:
 				if (canRead(ubyte.sizeof))
 					return read();
-				return 0;
+				return -1;
 		case Format.BIN16, Format.STR16:
 			} else {
 		case f2:
 			}
 			if (canRead(ushort.sizeof))
 				return load!ushort(read(ushort.sizeof));
-			return 0;
+			return -1;
 			static if (Raw) {
 		case Format.BIN32, Format.STR32:
 			} else {
@@ -537,7 +539,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			}
 			if (canRead(uint.sizeof))
 				return load!uint(read(uint.sizeof));
-			return 0;
+			return -1;
 		case Format.NIL:
 			return 0;
 		default:
@@ -757,7 +759,7 @@ unittest {
 	{ // int *
 		mixin DefinePacker;
 
-		auto test = tuple(byte.min, short.min, int.min, long.min);
+		auto test = tuple(byte.min, short.min, int.min, -1, -32, long.min);
 
 		packer.pack(test);
 
@@ -833,8 +835,9 @@ unittest {
 	{ // container
 		mixin DefinePacker;
 
-		Tuple!(ulong[], int[uint], string, bool[2], char[2]) test =
-			tuple([1UL, 2], [3U: 4, 5: 6, 7: 8], "MessagePack", [true, false], "D!");
+		Tuple!(ulong[], int[uint], string, bool[2], char[2], ubyte[32]) test =
+			tuple([1UL, 2], [3U: 4, 5: 6, 7: 8], "MessagePack", [true, false], "D!",
+				(ubyte[32]).init);
 
 		packer.pack(test);
 

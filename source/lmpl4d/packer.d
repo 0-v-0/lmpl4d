@@ -227,7 +227,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	version (NoPackingStruct) {
 	} else {
 		ref TThis pack(T)(in T obj) if (is(Unqual!T == struct)) {
-			if (T.init == obj) {
+			if (cast(const)T.init == obj) {
 				beginArray(0);
 				return this;
 			}
