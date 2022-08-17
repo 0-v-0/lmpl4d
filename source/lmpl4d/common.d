@@ -27,7 +27,7 @@ else {
 	{
 		static if (Classes.length)
 			enum NumOfSerializingMembers = Filter!(isPackedField, Classes[0].tupleof).length +
-				NumOfSerializingMembers!(Classes[1..$]);
+				NumOfSerializingMembers!(Classes[1 .. $]);
 		else
 			enum NumOfSerializingMembers = 0;
 	}
@@ -43,7 +43,6 @@ static if (real.sizeof == double.sizeof) {
 
 	import std.numeric;
 }
-
 
 /**
  * For float/double type (de)serialization

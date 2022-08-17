@@ -311,6 +311,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	T unpack(T)() if (isSomeArray!T) {
+		import std.conv : text;
+
 		if (checkNil()) {
 			static if (isStaticArray!T) {
 				pos++;
@@ -330,15 +332,16 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (length < 0)
 			throw new MessagePackException(
 				"Attempt to unpack with non-compatible type or buffer is insufficient: expected = array");
+		static if (isStaticArray!T)
+			if (length != T.length)
+				throw new MessagePackException(text("Static array length mismatch: got = ", length,
+					"expected = ", T.length));
 		version (betterC) {
 		} else {
 			static if (__traits(compiles, buf.length))
-				if (pos + length > buf.length) {
-					import std.conv : text;
-
+				if (pos + length > buf.length)
 					throw new MessagePackException(text("Invalid array size in byte stream: Length (", length,
 							") is larger than internal buffer size (", buf.length, ")"));
-				}
 		}
 		static if (isStaticArray!T)
 			T array = void;
@@ -379,6 +382,11 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			long length = beginArray();
 		if (length < 0)
 			return false;
+		static if (isStaticArray!T)
+			if (length != T.length) {
+				pos = spos;
+				return false;
+			}
 		version (betterC) {
 		} else {
 			static if (__traits(compiles, buf.length))
