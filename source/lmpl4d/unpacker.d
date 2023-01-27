@@ -410,8 +410,11 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			static if (!isStaticArray!T)
 				if (array.length != length)
 					array = uninitializedArray!T(length);
-			foreach (ref a; array)
-				a = unpack!U;
+			try
+				foreach (ref a; array)
+					a = unpack!U;
+			catch (Exception)
+				return false;
 		}
 		return true;
 	}
