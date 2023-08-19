@@ -19,7 +19,6 @@ jobs:
           - macos-latest
           - windows-latest
         dc:
-          - dmd-latest
           - ldc-latest
 
     runs-on: ${{ matrix.os }}
@@ -38,4 +37,5 @@ jobs:
         # In this mode, `mainSourceFile` is excluded and `version (unittest)` are included
         # See https://dub.pm/package-format-json.html#configurations
         dub test --parallel
+        dub test -c=EnableReal --parallel
         dub test -c=betterC --parallel

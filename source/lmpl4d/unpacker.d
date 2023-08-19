@@ -638,10 +638,10 @@ nothrow:
 	bool unpackExt(T)(ref byte type, ref T data) if (isOutputBuffer!(T, ubyte)) {
 		if (!canRead)
 			return false;
-		int header = read();
 
+		const spos = pos;
+		int header = read();
 		uint len = void;
-		uint rollbackLen = 1;
 		if (header >= Format.EXT && header <= Format.EXT + 4) {
 			// Fixed
 			len = 1 << (header - Format.EXT);
@@ -653,7 +653,6 @@ nothrow:
 				return false;
 			}
 			len = read();
-			rollbackLen++;
 			break;
 		case Format.EXT16:
 			if (!canRead(2 + 1)) {
@@ -661,7 +660,6 @@ nothrow:
 				return false;
 			}
 			len = read!ushort();
-			rollbackLen += 2;
 			break;
 		case Format.EXT32:
 			if (!canRead(4 + 1)) {
@@ -669,7 +667,6 @@ nothrow:
 				return false;
 			}
 			len = read!uint();
-			rollbackLen += 4;
 			break;
 		default:
 			pos--;
@@ -677,7 +674,7 @@ nothrow:
 		}
 
 		if (!canRead(len + 1)) {
-			pos -= rollbackLen;
+			pos = spos;
 			return false;
 		}
 

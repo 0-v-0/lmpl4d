@@ -1,6 +1,6 @@
 module lmpl4d.common;
 
-import core.bitop, std.container.array;
+import std.container.array;
 
 // dfmt off
 package import
@@ -94,7 +94,7 @@ version (unittest) {
 			import core.exception;
 			import core.stdc.stdlib;
 
-			bool overflow = false;
+			bool overflow;
 			size_t reqsize = mulu(T.sizeof, nlength, overflow);
 			if (!overflow) {
 				_length = nlength;
@@ -136,19 +136,10 @@ enum isOutBuffer(R, E) = __traits(compiles, (R r, E e) {
 		r += E.sizeof;
 	});
 
-public:
-
-T toBE(T)(in T value) @trusted if (isIntegral!T && T.sizeof > 1) {
-	version (LittleEndian) {
-		static if (T.sizeof == 2)
-			return byteswap(value);
-		else static if (T.sizeof == 4)
-			return bswap(cast(uint)value);
-		else
-			return bswap(value);
-	} else
-		return value;
-}
+version (LittleEndian)
+	import std.bitmanip : toBE = swapEndian;
+else
+	T toBE(T)(in T value) if (isIntegral!T) => value;
 
 /*
 * Takes 8bit from $(D_PARAM value)
@@ -169,6 +160,8 @@ unittest {
 		assert(take8from(cast(Int)0x0123456789abcdef) == 0xef);
 	}
 }
+
+public:
 
 enum isInputBuffer(R, E) = __traits(compiles, (R r, size_t i) { E e = r[i++]; });
 version (D_TypeInfo)
