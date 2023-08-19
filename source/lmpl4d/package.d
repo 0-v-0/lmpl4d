@@ -2,15 +2,13 @@ module lmpl4d;
 
 public import lmpl4d.common, lmpl4d.packer, lmpl4d.unpacker;
 
-auto packer(Stream)(ref Stream stream) {
-	return Packer!Stream(stream);
-}
+auto packer(Stream)(ref Stream stream)
+	=> Packer!Stream(stream);
 
-auto unpacker(Stream = const(ubyte)[])(Stream stream) {
-	return Unpacker!Stream(stream);
-}
+auto unpacker(Stream = const(ubyte)[])(Stream stream)
+	=> Unpacker!Stream(stream);
 
-unittest {
+version (D_Exceptions) unittest {
 	import std.stdio;
 
 	ubyte[] buf;

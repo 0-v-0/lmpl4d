@@ -9,144 +9,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		buf = stream;
 	}
 
-	version (betterC) {
-		void rollback(size_t size, string expected, Format actual = Format.NONE) {
-			pos -= size + 1;
-		}
-
-		void check(size_t size = 1) {
-		}
-	} else {
-		T unpack(T)()
-		if (is(Unqual!T == enum) || isPointer!T || isSomeChar!T || isNumeric!T || is(
-				Unqual!T == bool)) {
-			static if (is(Unqual!T == enum))
-				return cast(T)unpack!(OriginalType!T);
-			else static if (isPointer!T) {
-				T val;
-				if (unpackNil(val))
-					return val;
-				throw new UnpackException("Can't deserialize a pointer that is not null");
-			} else static if (is(Unqual!T == char))
-				return cast(T)unpack!ubyte;
-			else static if (is(Unqual!T == wchar))
-				return cast(T)unpack!ushort;
-			else static if (is(Unqual!T == dchar))
-				return cast(T)unpack!uint;
-			else static if (isNumeric!T || is(Unqual!T == bool)) {
-				check();
-				int header = read();
-				static if (isIntegral!T) {
-					if (header <= 0x7f)
-						return cast(T)header;
-					if (0xe0 <= header && header <= 0xff)
-						return cast(byte)header;
-				}
-				switch (header) {
-					static if (is(Unqual!T == bool)) {
-				case Format.TRUE:
-						return true;
-				case Format.FALSE:
-						return false;
-					} else static if (isIntegral!T) {
-				case Format.UINT8:
-						check(ubyte.sizeof);
-						return read();
-				case Format.UINT16:
-						check(ushort.sizeof);
-						auto val = load!ushort(read(ushort.sizeof));
-						if (val > T.max)
-							rollback(ushort.sizeof, T.stringof, Format.UINT16);
-						return cast(T)val;
-				case Format.UINT32:
-						check(uint.sizeof);
-						auto val = load!uint(read(uint.sizeof));
-						if (val > T.max)
-							rollback(uint.sizeof, T.stringof, Format.UINT32);
-						return cast(T)val;
-				case Format.UINT64:
-						check(ulong.sizeof);
-						auto val = load!ulong(read(ulong.sizeof));
-						if (val > T.max)
-							rollback(ulong.sizeof, T.stringof, Format.UINT64);
-						return cast(T)val;
-				case Format.INT8:
-						check(byte.sizeof);
-						return cast(T)read();
-				case Format.INT16:
-						check(short.sizeof);
-						auto val = load!short(read(short.sizeof));
-						if (val < T.min || T.max < val)
-							rollback(short.sizeof, T.stringof, Format.INT16);
-						return cast(T)val;
-				case Format.INT32:
-						check(int.sizeof);
-						auto val = load!int(read(int.sizeof));
-						if (val < T.min || T.max < val)
-							rollback(int.sizeof, T.stringof, Format.INT32);
-						return cast(T)val;
-				case Format.INT64:
-						check(long.sizeof);
-						auto val = load!long(read(long.sizeof));
-						if (val < T.min || T.max < val)
-							rollback(long.sizeof, T.stringof, Format.INT64);
-						return cast(T)val;
-					} else static if (isFloatingPoint!T) {
-				case Format.FLOAT:
-						_f val;
-						check(uint.sizeof);
-						val.i = load!uint(read(uint.sizeof));
-						return val.f;
-				case Format.DOUBLE:
-						// check precision loss
-						static if (is(Unqual!T == float))
-							rollback(0, T.stringof, Format.DOUBLE);
-
-						_d val;
-						check(ulong.sizeof);
-						val.i = load!ulong(read(ulong.sizeof));
-						return val.f;
-				case Format.REAL:
-						static if (!EnableReal) {
-							rollback(0, "real is disabled", Format.REAL);
-							break;
-						} else {
-							// check precision loss
-							static if (is(Unqual!T == float) || is(Unqual!T == double))
-								rollback(0, T.stringof, Format.REAL);
-							check(real.sizeof);
-							version (NonX86) {
-								CustomFloat!80 tmp;
-
-								const frac = load!ulong(read(ulong.sizeof));
-								const exp = load!ushort(read(ushort.sizeof));
-
-								tmp.significand = frac;
-								tmp.exponent = exp & 0x7fff;
-								tmp.sign = (exp & 0x8000) != 0;
-
-								// NOTE: tmp.get!real is inf on non-x86 when deserialized value is larger than double.max.
-								return tmp.get!real;
-							} else {
-								_r tmp;
-
-								tmp.fraction = load!(typeof(tmp.fraction))(
-									read(tmp.fraction.sizeof));
-								tmp.exponent = load!(typeof(tmp.exponent))(
-									read(tmp.exponent.sizeof));
-
-								return tmp.f;
-							}
-						}
-					}
-				default:
-					break;
-				}
-				rollback(0, T.stringof, cast(Format)header);
-			}
-			assert(0, "Unsupported type");
-		}
-
+	version (D_Exceptions) {
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
 			import std.conv : text;
 
@@ -159,11 +22,148 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			if (!canRead(size))
 				throw new UnpackException("Insufficient buffer");
 		}
+	} else {
+		void rollback(size_t size, string expected, Format actual = Format.NONE) {
+			pos -= size + 1;
+		}
+
+		void check(size_t size = 1) {
+		}
+	}
+
+	T unpack(T)()
+	if (is(Unqual!T == enum) || isPointer!T || isSomeChar!T ||
+		isNumeric!T || is(Unqual!T == bool)) {
+		static if (is(Unqual!T == enum))
+			return cast(T)unpack!(OriginalType!T);
+		else static if (isPointer!T) {
+			T val;
+			version (D_Exceptions) {
+				if (!unpackNil(val))
+					throw new UnpackException("Can't deserialize a pointer that is not null");
+			}
+			return val;
+		} else static if (is(Unqual!T == char))
+			return cast(T)unpack!ubyte;
+		else static if (is(Unqual!T == wchar))
+			return cast(T)unpack!ushort;
+		else static if (is(Unqual!T == dchar))
+			return cast(T)unpack!uint;
+		else static if (isNumeric!T || is(Unqual!T == bool)) {
+			check();
+			int header = read();
+			static if (isIntegral!T) {
+				if (header <= 0x7f)
+					return cast(T)header;
+				if (0xe0 <= header && header <= 0xff)
+					return cast(byte)header;
+			}
+			switch (header) {
+				static if (is(Unqual!T == bool)) {
+			case Format.TRUE:
+					return true;
+			case Format.FALSE:
+					return false;
+				} else static if (isIntegral!T) {
+			case Format.UINT8:
+					check(ubyte.sizeof);
+					return read();
+			case Format.UINT16:
+					check(ushort.sizeof);
+					auto val = read!ushort();
+					if (val > T.max)
+						rollback(ushort.sizeof, T.stringof, Format.UINT16);
+					return cast(T)val;
+			case Format.UINT32:
+					check(uint.sizeof);
+					auto val = read!uint();
+					if (val > T.max)
+						rollback(uint.sizeof, T.stringof, Format.UINT32);
+					return cast(T)val;
+			case Format.UINT64:
+					check(ulong.sizeof);
+					auto val = read!ulong();
+					if (val > T.max)
+						rollback(ulong.sizeof, T.stringof, Format.UINT64);
+					return cast(T)val;
+			case Format.INT8:
+					check(byte.sizeof);
+					return cast(T)read();
+			case Format.INT16:
+					check(short.sizeof);
+					auto val = read!short();
+					if (val < T.min || T.max < val)
+						rollback(short.sizeof, T.stringof, Format.INT16);
+					return cast(T)val;
+			case Format.INT32:
+					check(int.sizeof);
+					auto val = read!int();
+					if (val < T.min || T.max < val)
+						rollback(int.sizeof, T.stringof, Format.INT32);
+					return cast(T)val;
+			case Format.INT64:
+					check(long.sizeof);
+					auto val = read!long();
+					if (val < T.min || T.max < val)
+						rollback(long.sizeof, T.stringof, Format.INT64);
+					return cast(T)val;
+				} else static if (isFloatingPoint!T) {
+			case Format.FLOAT:
+					_f val;
+					check(uint.sizeof);
+					val.i = read!uint();
+					return val.f;
+			case Format.DOUBLE:
+					// check precision loss
+					static if (is(Unqual!T == float))
+						rollback(0, T.stringof, Format.DOUBLE);
+
+					_d val;
+					check(ulong.sizeof);
+					val.i = read!ulong();
+					return val.f;
+			case Format.REAL:
+					version (EnableReal) {
+						// check precision loss
+						static if (is(Unqual!T == float) || is(Unqual!T == double))
+							rollback(0, T.stringof, Format.REAL);
+						check(real.sizeof);
+						version (NonX86) {
+							CustomFloat!80 tmp;
+
+							const frac = read!ulong();
+							const exp = read!ushort();
+
+							tmp.significand = frac;
+							tmp.exponent = exp & 0x7fff;
+							tmp.sign = (exp & 0x8000) != 0;
+
+							// NOTE: tmp.get!real is inf on non-x86 when deserialized value is larger than double.max.
+							return tmp.get!real;
+						} else {
+							_r tmp;
+
+							tmp.fraction = read!(typeof(tmp.fraction))();
+							tmp.exponent = read!(typeof(tmp.exponent))();
+
+							return tmp.f;
+						}
+					} else {
+						rollback(0, "real is disabled", Format.REAL);
+						break;
+					}
+				}
+			default:
+				break;
+			}
+			rollback(0, T.stringof, cast(Format)header);
+		}
+		assert(0, "Unsupported type");
 	}
 
 	T unpack(T)(T defValue) nothrow
-	if (is(Unqual!T == enum) || isPointer!T || isTuple!T || isSomeChar!T || isNumeric!T || is(
-			Unqual!T == bool)) {
+	if (is(Unqual!T == enum) || isPointer!T || isTuple!T
+		|| isSomeChar!T || isNumeric!T || is(Unqual!T == bool)) {
 		static if (is(Unqual!T == enum))
 			return cast(T)unpack(cast(OriginalType!T)defValue);
 		else static if (isPointer!T) {
@@ -204,21 +204,21 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			case Format.UINT16:
 					if (!canRead(ushort.sizeof))
 						return defValue;
-					auto val = load!ushort(read(ushort.sizeof));
+					auto val = read!ushort();
 					if (val > T.max)
 						return defValue;
 					return cast(T)val;
 			case Format.UINT32:
 					if (!canRead(uint.sizeof))
 						return defValue;
-					auto val = load!uint(read(uint.sizeof));
+					auto val = read!uint();
 					if (val > T.max)
 						return defValue;
 					return cast(T)val;
 			case Format.UINT64:
 					if (!canRead(ulong.sizeof))
 						return defValue;
-					auto val = load!ulong(read(ulong.sizeof));
+					auto val = read!ulong();
 					if (val > T.max)
 						return defValue;
 					return cast(T)val;
@@ -229,21 +229,21 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			case Format.INT16:
 					if (!canRead(short.sizeof))
 						return defValue;
-					auto val = load!short(read(short.sizeof));
+					auto val = read!short();
 					if (val < T.min || T.max < val)
 						return defValue;
 					return cast(T)val;
 			case Format.INT32:
 					if (!canRead(int.sizeof))
 						return defValue;
-					auto val = load!int(read(int.sizeof));
+					auto val = read!int();
 					if (val < T.min || T.max < val)
 						return defValue;
 					return cast(T)val;
 			case Format.INT64:
 					if (!canRead(long.sizeof))
 						return defValue;
-					auto val = load!long(read(long.sizeof));
+					auto val = read!long();
 					if (val < T.min || T.max < val)
 						return defValue;
 					return cast(T)val;
@@ -252,7 +252,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 					_f val;
 					if (!canRead(uint.sizeof))
 						return defValue;
-					val.i = load!uint(read(uint.sizeof));
+					val.i = read!uint();
 					return val.f;
 			case Format.DOUBLE:
 					// check precision loss
@@ -262,13 +262,11 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 						_d val = void;
 						if (!canRead(ulong.sizeof))
 							return defValue;
-						val.i = load!ulong(read(ulong.sizeof));
+						val.i = read!ulong();
 						return val.f;
 					}
 			case Format.REAL:
-					static if (!EnableReal)
-						return defValue;
-					else {
+					version (EnableReal) {
 						// check precision loss
 						static if (is(Unqual!T == float) || is(Unqual!T == double))
 							return defValue;
@@ -277,8 +275,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 						version (NonX86) {
 							CustomFloat!80 tmp;
 
-							const frac = load!ulong(read(ulong.sizeof));
-							const exp = load!ushort(read(ushort.sizeof));
+							const frac = read!ulong();
+							const exp = read!ushort();
 
 							tmp.significand = frac;
 							tmp.exponent = exp & 0x7fff;
@@ -289,12 +287,13 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 						} else {
 							_r tmp = void;
 
-							tmp.fraction = load!(typeof(tmp.fraction))(read(tmp.fraction.sizeof));
-							tmp.exponent = load!(typeof(tmp.exponent))(read(tmp.exponent.sizeof));
+							tmp.fraction = read!(typeof(tmp.fraction))();
+							tmp.exponent = read!(typeof(tmp.exponent))();
 
 							return tmp.f;
 						}
-					}
+					} else
+						return defValue;
 				}
 			default:
 				pos = spos;
@@ -311,8 +310,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	T unpack(T)() if (isSomeArray!T) {
-		import std.conv : text;
-
 		if (checkNil()) {
 			static if (isStaticArray!T) {
 				pos++;
@@ -329,27 +326,37 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			long length = beginRaw();
 		else
 			long length = beginArray();
-		if (length < 0)
-			throw new MessagePackException(
-				"Attempt to unpack with non-compatible type or buffer is insufficient: expected = array");
-		static if (isStaticArray!T)
-			if (length != T.length)
-				throw new MessagePackException(text("Static array length mismatch: got = ", length,
-					"expected = ", T.length));
-		version (betterC) {
-		} else {
+		version (D_Exceptions) {
+			import std.conv : text;
+
+			if (length < 0)
+				throw new MessagePackException(
+					"Attempt to unpack with non-compatible type or buffer is insufficient: expected = array");
+			static if (isStaticArray!T)
+				if (length != T.length)
+					throw new MessagePackException(text("Static array length mismatch: got = ", length,
+							"expected = ", T.length));
 			static if (__traits(compiles, buf.length))
 				if (pos + length > buf.length)
 					throw new MessagePackException(text("Invalid array size in byte stream: Length (", length,
 							") is larger than internal buffer size (", buf.length, ")"));
+		} else {
+			if (length < 0)
+				return T.init;
+			static if (isStaticArray!T) {
+				if (length != T.length)
+					return T.init;
+			}
 		}
 		static if (isStaticArray!T)
 			T array = void;
-		else {
-			import std.array;
+		else version (D_BetterC)
+				static assert(0, "Dynamic array unpacking is not supported in BetterC mode");
+			else {
+				import std.array;
 
-			T array = uninitializedArray!T(length);
-		}
+				T array = uninitializedArray!T(length);
+			}
 		if (length == 0)
 			return array;
 		static if (RawBytes) {
@@ -365,7 +372,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	bool unpack(T)(ref T array) nothrow if (isSomeArray!T) {
-		import std.array;
 
 		alias U = typeof(T.init[0]);
 		const spos = pos;
@@ -382,19 +388,16 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			long length = beginArray();
 		if (length < 0)
 			return false;
+		static if (__traits(compiles, buf.length))
+			if (length > buf.length) {
+				pos = spos;
+				return false;
+			}
 		static if (isStaticArray!T)
 			if (length != T.length) {
 				pos = spos;
 				return false;
 			}
-		version (betterC) {
-		} else {
-			static if (__traits(compiles, buf.length))
-				if (length > buf.length) {
-					pos = spos;
-					return false;
-				}
-		}
 		if (length == 0)
 			return true;
 		static if (RawBytes) {
@@ -407,14 +410,23 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			else
 				array = cast(T)read(length);
 		} else {
-			static if (!isStaticArray!T)
-				if (array.length != length)
-					array = uninitializedArray!T(length);
+			static if (!isStaticArray!T) {
+				if (array.length != length) {
+					version (D_BetterC) {
+						pos = spos;
+						return false;
+					} else {
+						import std.array;
+
+						array = uninitializedArray!T(length);
+					}
+				}
+			}
 			try
 				foreach (ref a; array)
 					a = unpack!U;
-			catch (Exception)
-				return false;
+					catch (Exception)
+						return false;
 		}
 		return true;
 	}
@@ -541,7 +553,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		case f2:
 			}
 			if (canRead(ushort.sizeof))
-				return load!ushort(read(ushort.sizeof));
+				return read!ushort();
 			return -1;
 			static if (Raw) {
 		case Format.BIN32, Format.STR32:
@@ -549,7 +561,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		case cast(Format)(f2 + 1):
 			}
 			if (canRead(uint.sizeof))
-				return load!uint(read(uint.sizeof));
+				return read!uint();
 			return -1;
 		case Format.NIL:
 			return 0;
@@ -583,16 +595,18 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		T unpack(T)() if (is(Unqual!T == struct)) {
 			T val;
 			long len = beginArray();
-			if (len < 0)
-				throw new MessagePackException(
-					"Attempt to unpack with non-compatible type: expected = array");
+			version (D_Exceptions) {
+				if (len < 0)
+					throw new MessagePackException(
+						"Attempt to unpack with non-compatible type: expected = array");
+			}
 			if (len > 0) {
 				if (len != NumOfSerializingMembers!T)
 					rollback(calculateSize(len), "the number of struct fields is mismatched");
-
-				foreach (i, ref member; val.tupleof)
-					static if (isPackedField!(T.tupleof[i]))
-						member = unpack!(typeof(member));
+				else
+					foreach (i, ref member; val.tupleof)
+						static if (isPackedField!(T.tupleof[i]))
+							member = unpack!(typeof(member));
 			}
 			return val;
 		}
@@ -625,7 +639,6 @@ nothrow:
 		if (!canRead)
 			return false;
 		int header = read();
-		import std.conv : text;
 
 		uint len = void;
 		uint rollbackLen = 1;
@@ -647,7 +660,7 @@ nothrow:
 				pos--;
 				return false;
 			}
-			len = load!ushort(read(2));
+			len = read!ushort();
 			rollbackLen += 2;
 			break;
 		case Format.EXT32:
@@ -655,7 +668,7 @@ nothrow:
 				pos--;
 				return false;
 			}
-			len = load!uint(read(4));
+			len = read!uint();
 			rollbackLen += 4;
 			break;
 		default:
@@ -675,16 +688,28 @@ nothrow:
 		return true;
 	}
 
+	ubyte peek() => buf[pos];
+
 	/*
 	 * Reads value from buffer and advances offset.
 	 */
-	ubyte read() {
-		return buf[pos++];
-	}
+	ubyte read() => buf[pos++];
 
 	auto read(size_t size) {
 		auto result = buf[pos .. pos + size];
 		pos += size;
+		return result;
+	}
+
+	/*
+	 * Reads $(D_PARAM T) type value from $(D_PARAM buffer).
+	 *
+	 * Returns:
+	 *  the Endian-converted value.
+	 */
+	T read(T)() {
+		auto result = toBE(*cast(const T*)&buf[pos]);
+		pos += T.sizeof;
 		return result;
 	}
 
@@ -707,9 +732,7 @@ nothrow:
 	 * Returns:
 	 *  true if next object is nil.
 	 */
-	bool checkNil() {
-		return canRead && buf[pos] == Format.NIL;
-	}
+	bool checkNil() => canRead && peek() == Format.NIL;
 
 	/*
 	 * Deserializes nil object and assigns to $(D_PARAM value).
@@ -724,30 +747,16 @@ nothrow:
 		if (!canRead)
 			return false;
 
-		if (buf[pos] == Format.NIL) {
+		if (peek() == Format.NIL) {
 			value = null;
 			pos++;
 			return true;
 		}
 		return false;
 	}
-
-	/*
-	 * Loads $(D_PARAM T) type value from $(D_PARAM buffer).
-	 *
-	 * Params:
-	 *  buffer = the serialized contents.
-	 *
-	 * Returns:
-	 *  the Endian-converted value.
-	 */
-	package T load(T)(in ubyte[] buf) {
-		return toBE(*cast(const T*)buf.ptr);
-	}
 }
 
-version (unittest) import lmpl4d.packer,
-std.exception;
+version (unittest) import lmpl4d.packer;
 
 unittest {
 	{ // unique
@@ -817,8 +826,10 @@ unittest {
 }
 
 version (NoPackingStruct) {
-} else
+} else version (D_Exceptions)
 	unittest {
+	import std.container.array;
+
 	struct Test {
 		string f1;
 		@nonPacked int f2;
@@ -840,7 +851,7 @@ version (NoPackingStruct) {
 	assert(packer2.pack(Test.init).buf.length < buf.length);
 }
 
-unittest {
+version (D_Exceptions) unittest {
 	import std.conv : text;
 
 	{ // container

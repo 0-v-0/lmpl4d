@@ -5,11 +5,9 @@ import lmpl4d.common;
 struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	AOutputBuf!Stream buf;
 
-	@property auto opSlice() {
-		return buf[];
-	}
+	@property auto opSlice() => buf[];
 
-	alias TThis = typeof(this);
+	private alias TThis = typeof(this);
 
 	this(ref Stream stream) {
 		buf = AOutputBuf!Stream(stream);
@@ -474,7 +472,7 @@ unittest { // float, double
 			assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			break;
 		default:
-			static if (EnableReal) {
+			version (EnableReal) {
 				const t = _r(cast(T)ftests[I].value);
 				const f = toBE(cast(ulong)t.fraction);
 				const e = toBE(cast(ushort)t.exponent);
@@ -500,7 +498,7 @@ unittest  // pointer
 		}
 	}
 
-	PTest[] ptests = [PTest(Format.UINT64), PTest(Format.INT64), PTest(Format.DOUBLE)];
+	PTest[3] ptests = [PTest(Format.UINT64), PTest(Format.INT64), PTest(Format.DOUBLE)];
 
 	auto v0 = ulong.max;
 	auto v1 = long.min;
@@ -560,7 +558,7 @@ unittest {
 
 	enum : ulong { A = 16 / 2, B = ushort.max, C = uint.max }
 
-	enum CTest[][] ctests = [
+	immutable CTest[][] ctests = [
 		[{Format.ARRAY | A, Format.ARRAY | A}, {Format.ARRAY16, B}, {Format.ARRAY32, C}],
 		[{Format.MAP   | A, Format.MAP   | A}, {Format.MAP16,   B}, {Format.MAP32,   C}],
 		[{Format.STR   | A, Format.STR   | A}, {Format.STR16,   B}, {Format.STR32,   C}],
@@ -591,10 +589,8 @@ unittest {
 		}
 	}
 
-
-
 // dfmt on
-{ // ext types
+version (D_Exceptions) { // ext types
 	import std.conv : text;
 
 	byte type = 7; // an arbitrary type value

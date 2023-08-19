@@ -1,7 +1,7 @@
 name "lmpl4d"
 description "Lightweight MessagePack library for D"
 authors "0-v-0"
-copyright "Copyright © 2021-2022, 0-v-0"
+copyright "Copyright © 2021-2023, 0-v-0"
 license "MIT"
 targetType "library"
 dflags "-preview=in"
@@ -9,6 +9,9 @@ configuration "library" {
 }
 configuration "betterC" {
 	dflags "-betterC"
+}
+configuration "EnableReal" {
+	versions "EnableReal"
 }
 configuration "lshared" {
 	dflags "--link-defaultlib-shared" platform="ldc"

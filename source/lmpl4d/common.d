@@ -8,12 +8,12 @@ package import
 	std.traits,
 	std.typecons;
 
-version(EnableReal)
+version (EnableReal)
 	enum EnableReal = true;
 else
 	enum EnableReal = false;
 
-version(NoPackingStruct) {}
+version (NoPackingStruct) {}
 else {
 	struct nonPacked {} // @suppress(dscanner.style.phobos_naming_convention)
 
@@ -34,7 +34,6 @@ else {
 }
 
 package:
-
 enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(Unqual!T == enum);
 
 static if (real.sizeof == double.sizeof) {
@@ -44,9 +43,7 @@ static if (real.sizeof == double.sizeof) {
 	import std.numeric;
 }
 
-/**
- * For float/double type (de)serialization
- */
+/** For float/double type (de)serialization */
 union _f { float f; uint i; }
 
 union _d { double f; ulong i; }
@@ -80,14 +77,64 @@ template AsteriskOf(T) {
 		enum AsteriskOf = "";
 }
 
-version (unittest) void fillData(T)(ref T data) {
-	import core.stdc.stdlib;
-	import std.datetime.systime;
+version (unittest) {
+	struct SimpleArray(T) {
+		T* ptr;
+		private size_t _length;
+	nothrow:
+		@disable this(this);
 
-	srand(cast(uint)Clock.currStdTime);
-	foreach (ref x; data)
-		x = cast(ubyte)rand();
+		~this() {
+			length = 0;
+		}
+
+		@property size_t length() const => _length;
+		@property void length(size_t nlength) {
+			import core.checkedint : mulu;
+			import core.exception;
+			import core.stdc.stdlib;
+
+			bool overflow = false;
+			size_t reqsize = mulu(T.sizeof, nlength, overflow);
+			if (!overflow) {
+				_length = nlength;
+				ptr = cast(T*)realloc(ptr, reqsize);
+			} else
+				onOutOfMemoryErrorNoGC();
+		}
+
+		alias opDollar = length;
+
+		ref inout(T) opIndex(size_t idx) inout
+		in (idx < _length)
+			=> ptr[idx];
+
+		inout(T)[] opSlice() inout => ptr[0 .. _length];
+
+		inout(T)[] opSlice(size_t a, size_t b) inout
+		in (a <= b && b <= _length)
+			=> ptr[a .. b];
+	}
+
+	void fillData(T)(ref T data) {
+		import core.stdc.stdlib;
+		import core.stdc.time;
+
+		srand(cast(uint)time(null));
+		foreach (ref x; data)
+			x = cast(ubyte)rand();
+	}
 }
+
+enum isOutBuffer(R, E) = __traits(compiles, (R r, E e) {
+		size_t sz = r.length;
+		r.length = sz + E.sizeof;
+		*cast(Unqual!E*)&r[sz] = e;
+	})
+	|| __traits(compiles, (R r, E e) {
+		*cast(Unqual!E*)&r[0] = e;
+		r += E.sizeof;
+	});
 
 public:
 
@@ -112,9 +159,7 @@ T toBE(T)(in T value) @trusted if (isIntegral!T && T.sizeof > 1) {
 * Returns:
 *  the 8bit value corresponding $(D_PARAM bit) width.
 */
-ubyte take8from(T)(T value) {
-	return cast(ubyte)value;
-}
+ubyte take8from(T)(T value) => cast(ubyte)value;
 
 unittest {
 	foreach (Int; AliasSeq!(ubyte, ushort, uint, ulong)) {
@@ -126,43 +171,38 @@ unittest {
 }
 
 enum isInputBuffer(R, E) = __traits(compiles, (R r, size_t i) { E e = r[i++]; });
-enum isOutputBuffer(R, E) =
-	__traits(compiles, (R r, E e) { r.reserve(1); r ~= e; r = R(&r[0], 1, 1); }) || __traits(
-		compiles,
-		(R r, E e) {
-		size_t sz = r.length;
-		r.length = sz + E.sizeof;
-		*cast(Unqual!E*)&r[sz] = e;
-	})
-	|| __traits(compiles, (R r, E e) {
-		*cast(Unqual!E*)&r[0] = e;
-		r += E.sizeof;
-	});
+version (D_TypeInfo)
+	enum isOutputBuffer(R, E) =
+		__traits(compiles, (R r, E e) { r.reserve(1); r ~= e; r = R(&r[0], 1, 1); }) ||
+		isOutBuffer!(R, E);
+else
+	alias isOutputBuffer = isOutBuffer;
 
 unittest {
 	static assert(!isInputBuffer!(void[], ubyte));
 	static assert(isInputBuffer!(ubyte[9], ubyte));
 	static assert(isInputBuffer!(ubyte[], ubyte));
 	static assert(isInputBuffer!(ubyte*, ubyte));
-	static assert(isInputBuffer!(Array!ubyte, ubyte));
 	static assert(!isInputBuffer!(ubyte, ubyte));
 	static assert(!isInputBuffer!(int[], ubyte));
 	static assert(isOutputBuffer!(void[], ubyte));
 	static assert(!isOutputBuffer!(ubyte[9], ubyte));
 	static assert(isOutputBuffer!(ubyte[], ubyte));
 	static assert(isOutputBuffer!(ubyte*, ubyte));
-	static assert(isOutputBuffer!(Array!ubyte, ubyte));
 	static assert(isOutputBuffer!(int[], ubyte));
+	version (D_BetterC) {
+	} else {
+		static assert(isInputBuffer!(Array!ubyte, ubyte));
+		static assert(isOutputBuffer!(Array!ubyte, ubyte));
+	}
 }
 
-version (betterC) {
-} else {
-pure:
+version (D_Exceptions) {
 	/**
 	 * $(D MessagePackException) is a root Exception for MessagePack related operation.
 	 */
 	class MessagePackException : Exception {
-		this(string msg) {
+		this(string msg) pure {
 			super(msg);
 		}
 	}
@@ -170,7 +210,7 @@ pure:
 	 * $(D UnpackException) is thrown on deserialization failure
 	 */
 	class UnpackException : MessagePackException {
-		this(string msg) {
+		this(string msg) pure {
 			super(msg);
 		}
 	}
@@ -242,19 +282,14 @@ enum Format : ubyte {
 /*
  * Calculates the format size of container length.
  */
-size_t calculateSize(in size_t length) {
-	return length < 16 ? 0 : length <= ushort.max ? ushort.sizeof : uint.sizeof;
-}
+size_t calculateSize(size_t length)
+	=> length < 16 ? 0 : length <= ushort.max ? ushort.sizeof : uint.sizeof;
 
 /// Adaptive Output Buffer
 struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
-	@property ref Stream buf() {
-		return *arr;
-	}
+	@property ref Stream buf() => *arr;
 
-	@property ref const(Stream) buf() const {
-		return *arr;
-	}
+	@property ref const(Stream) buf() const => *arr;
 
 	Stream* arr;
 	this(ref Stream array) {
@@ -263,7 +298,8 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 
 	static if (!isDynamicArray!T)
 		ref const(Stream) opOpAssign(string op : "~")(inout(T[]) rhs) {
-			buf.reserve(buf.length + rhs.length);
+			static if (__traits(compiles, buf.reserve(buf.length)))
+				buf.reserve(buf.length + rhs.length);
 			foreach (elem; rhs)
 				this ~= elem;
 			return buf;
@@ -273,14 +309,15 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 	if (!isDynamicArray!U) {
 		static if (isPointer!Stream)
 			size_t sz;
-		else
-			size_t sz = buf.length;
-		static if (__traits(compiles, buf.length = buf.length + 1))
-			buf.length = sz + U.sizeof;
 		else {
-			// for Dvector!T
-			buf.reserve(sz + U.sizeof);
-			buf = Stream(&buf[0], sz + U.sizeof, buf.capacity);
+			size_t sz = buf.length;
+			static if (__traits(compiles, buf.length = buf.length + 1))
+				buf.length = sz + U.sizeof;
+			else {
+				// for Dvector!T
+				buf.reserve(sz + U.sizeof);
+				buf = Stream(&buf[0], sz + U.sizeof, buf.capacity);
+			}
 		}
 		*cast(Unqual!U*)&buf[sz] = rhs;
 		static if (isPointer!Stream)
@@ -291,23 +328,24 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 	// for Array!T
 	static if (!__traits(compiles, buf[0 .. 2] == [0, 1]))
 		@nogc {
-			T[] opSlice() {
-				return (&buf[0])[0 .. buf.length];
-			}
+			T[] opSlice() => (&buf[0])[0 .. buf.length];
 
-			T[] opSlice(size_t i, size_t j) {
-				return (&buf[0])[i .. j];
-			}
+			T[] opSlice(size_t i, size_t j) => (&buf[0])[i .. j];
 		}
 
 	alias buf this;
 }
 
 version (unittest) {
-	import std.container.array, core.stdc.string;
+	import core.stdc.string;
 
 package:
 	template DefinePacker() {
+		version (D_BetterC)
+			alias Array = SimpleArray;
+		else
+			import std.container.array;
+
 		auto arr = Array!ubyte();
 		auto packer = Packer!(Array!ubyte)(arr);
 	}
@@ -317,9 +355,13 @@ package:
 		static if (is(typeof(test))) {
 			auto result = unpacker.unpack!(typeof(test));
 			auto testfunc = {
-				import std.conv : text;
+				version (D_BetterC)
+					assert(result == test);
+				else {
+					import std.conv : text;
 
-				assert(result == test, text(test, "\nExpected: ", result));
+					assert(result == test, text(test, "\nExpected: ", result));
+				}
 				return 0;
 			}();
 		}
