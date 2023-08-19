@@ -10,8 +10,9 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	version (D_Exceptions) {
+		import std.conv : text;
+
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
-			import std.conv : text;
 
 			pos -= size + 1;
 			throw new MessagePackException(text("Attempt to unpack with non-compatible type: ",
@@ -20,7 +21,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 
 		void check(size_t size = 1) {
 			if (!canRead(size))
-				throw new UnpackException("Insufficient buffer");
+				throw new UnpackException(text("Insufficient buffer: ", size, " bytes required"));
 		}
 	} else {
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
@@ -788,12 +789,11 @@ unittest {
 	{ // floating point
 		mixin DefinePacker;
 
-		static if (real.sizeof == double.sizeof || !EnableReal) {
+		static if (real.sizeof == double.sizeof || !EnableReal)
 			alias R = double;
-		} else {
+		else
 			alias R = real;
-		}
-		Tuple!(float, double, R) test = tuple(float.min_normal, double.max, cast(real)R.min_normal);
+		auto test = tuple(float.min_normal, double.max, R.min_normal);
 
 		packer.pack(test);
 

@@ -130,16 +130,16 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	ref TThis pack(T)(in T value) if (isFloatingPoint!T && !is(Unqual!T == enum)) {
 		static if (is(Unqual!T == float)) {
 			buf ~= Format.FLOAT;
-			buf ~= toBE(cast(uint)_f(value).i);
+			buf ~= toBE(_f(value).i);
 		} else static if (is(Unqual!T == double) || !EnableReal
 			|| real.sizeof == double.sizeof) { // Non-x86 CPUs, real type equals double type.
 			buf ~= Format.DOUBLE;
-			buf ~= toBE(cast(ulong)_d(value).i);
+			buf ~= toBE(_d(value).i);
 		} else {
 			buf ~= Format.REAL;
 			const tmp = _r(value);
-			buf ~= toBE(cast(ulong)tmp.fraction);
-			buf ~= toBE(cast(ushort)tmp.exponent);
+			buf ~= toBE(tmp.fraction);
+			buf ~= toBE(tmp.exponent);
 		}
 
 		return this;
@@ -377,19 +377,19 @@ unittest {
 
 				switch (i) {
 				case 0:
-					auto answer = take8from(test.value);
+					const answer = take8from(test.value);
 					assert(memcmp(&packer.buf[1], &answer, ubyte.sizeof) == 0);
 					break;
 				case 1:
-					auto answer = toBE(cast(ushort)test.value);
+					const answer = toBE(cast(ushort)test.value);
 					assert(memcmp(&packer.buf[1], &answer, ushort.sizeof) == 0);
 					break;
 				case 2:
-					auto answer = toBE(cast(uint)test.value);
+					const answer = toBE(cast(uint)test.value);
 					assert(memcmp(&packer.buf[1], &answer, uint.sizeof) == 0);
 					break;
 				default:
-					auto answer = toBE(cast(ulong)test.value);
+					const answer = toBE(cast(ulong)test.value);
 					assert(memcmp(&packer.buf[1], &answer, ulong.sizeof) == 0);
 				}
 			}
@@ -416,19 +416,19 @@ unittest {
 
 				switch (i) {
 				case 0:
-					auto answer = take8from(test.value);
+					const answer = take8from(test.value);
 					assert(memcmp(&packer.buf[1], &answer, byte.sizeof) == 0);
 					break;
 				case 1:
-					auto answer = toBE(cast(ushort)test.value);
+					const answer = toBE(cast(ushort)test.value);
 					assert(memcmp(&packer.buf[1], &answer, short.sizeof) == 0);
 					break;
 				case 2:
-					auto answer = toBE(cast(uint)test.value);
+					const answer = toBE(cast(uint)test.value);
 					assert(memcmp(&packer.buf[1], &answer, int.sizeof) == 0);
 					break;
 				default:
-					auto answer = toBE(cast(ulong)test.value);
+					const answer = toBE(cast(ulong)test.value);
 					assert(memcmp(&packer.buf[1], &answer, long.sizeof) == 0);
 				}
 			}
@@ -464,22 +464,22 @@ unittest { // float, double
 
 		switch (I) {
 		case 0:
-			const answer = toBE(cast(uint)_f(cast(T)ftests[I].value).i);
+			const answer = toBE(_f(cast(T)ftests[I].value).i);
 			assert(memcmp(&packer.buf[1], &answer, float.sizeof) == 0);
 			break;
 		case 1:
-			const answer = toBE(cast(ulong)_d(cast(T)ftests[I].value).i);
+			const answer = toBE(_d(cast(T)ftests[I].value).i);
 			assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			break;
 		default:
 			version (EnableReal) {
 				const t = _r(cast(T)ftests[I].value);
-				const f = toBE(cast(ulong)t.fraction);
-				const e = toBE(cast(ushort)t.exponent);
+				const f = toBE(t.fraction);
+				const e = toBE(t.exponent);
 				assert(memcmp(&packer.buf[1], &f, f.sizeof) == 0);
 				assert(memcmp(&packer.buf[1 + f.sizeof], &e, e.sizeof) == 0);
 			} else {
-				const answer = toBE(cast(ulong)_d(cast(T)ftests[I].value).i);
+				const answer = toBE(_d(cast(T)ftests[I].value).i);
 				assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
 			}
 		}

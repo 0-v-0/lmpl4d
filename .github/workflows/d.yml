@@ -19,7 +19,7 @@ jobs:
           - macos-latest
           - windows-latest
         dc:
-          - ldc-latest
+          - ldc-beta
 
     runs-on: ${{ matrix.os }}
 
