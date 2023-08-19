@@ -128,7 +128,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 						// check precision loss
 						static if (is(Unqual!T == float) || is(Unqual!T == double))
 							rollback(0, T.stringof, Format.REAL);
-						check(real.sizeof);
+						check(ulong.sizeof + ushort.sizeof);
 						version (NonX86) {
 							CustomFloat!80 tmp;
 
@@ -271,7 +271,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 						// check precision loss
 						static if (is(Unqual!T == float) || is(Unqual!T == double))
 							return defValue;
-						if (!canRead(real.sizeof))
+						if (!canRead(ulong.sizeof + ushort.sizeof))
 							return defValue;
 						version (NonX86) {
 							CustomFloat!80 tmp;

@@ -5,6 +5,8 @@ copyright "Copyright © 2021-2023, 0-v-0"
 license "MIT"
 targetType "library"
 dflags "-preview=in"
+sourcePaths "lmpl4d"
+importPaths "."
 configuration "library" {
 }
 configuration "betterC" {
