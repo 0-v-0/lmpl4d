@@ -558,7 +558,7 @@ unittest {
 
 	enum : ulong { A = 16 / 2, B = ushort.max, C = uint.max }
 
-	immutable CTest[][] ctests = [
+	immutable CTest[3][3] ctests = [
 		[{Format.ARRAY | A, Format.ARRAY | A}, {Format.ARRAY16, B}, {Format.ARRAY32, C}],
 		[{Format.MAP   | A, Format.MAP   | A}, {Format.MAP16,   B}, {Format.MAP32,   C}],
 		[{Format.STR   | A, Format.STR   | A}, {Format.STR16,   B}, {Format.STR32,   C}],
