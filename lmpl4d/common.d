@@ -8,40 +8,51 @@ package import
 	std.traits,
 	std.typecons;
 
-version (EnableReal)
-	enum EnableReal = true;
-else
-	enum EnableReal = false;
 
 version (NoPackingStruct) {}
 else {
 	struct nonPacked {} // @suppress(dscanner.style.phobos_naming_convention)
 
 	package enum isPackedField(alias field) = staticIndexOf!(nonPacked, __traits(getAttributes, field)) == -1
-		&& !isSomeFunction!(typeof(field));
+		&& !isSomeFunction!field;
 
 	/**
 	 * Get the number of member to serialize.
 	 */
-	template NumOfSerializingMembers(Classes...)
-	{
-		static if (Classes.length)
-			enum NumOfSerializingMembers = Filter!(isPackedField, Classes[0].tupleof).length +
-				NumOfSerializingMembers!(Classes[1 .. $]);
-		else
-			enum NumOfSerializingMembers = 0;
+	size_t NumOfSerializingMembers(T...)() {
+		size_t n;
+		foreach (t; T)
+			n += Filter!(isPackedField, t.tupleof).length;
+		return n;
 	}
 }
 
 package:
-enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(Unqual!T == enum);
+enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(T == enum);
 
-static if (real.sizeof == double.sizeof) {
-	// for 80bit real inter-operation on non-x86 CPU
-	version = NonX86;
+version (EnableReal) {
+	enum EnableReal = true;
 
-	import std.numeric;
-}
+	auto getReal(ulong frac, ushort exp) {
+		static if (real.sizeof == double.sizeof) {
+			// for 80bit real inter-operation on non-x86 CPU
+			import std.numeric;
+
+			CustomFloat!(64, 7) tmp;
+
+			tmp.significand = frac;
+			tmp.exponent = exp & 0x7fff;
+			tmp.sign = (exp & 0x8000) != 0;
+
+			// NOTE: tmp.get!real is inf on non-x86 when deserialized value is larger than double.max.
+			return tmp.get!real;
+		} else {
+			_r tmp = {fraction: frac, exponent: exp};
+			return tmp.f;
+		}
+	}
+} else
+	enum EnableReal = false;
 
 /** For float/double type (de)serialization */
 union _f { float f; uint i; }
@@ -89,15 +100,15 @@ version (unittest) {
 		}
 
 		@property size_t length() const => _length;
-		@property void length(size_t nlength) {
+		@property void length(size_t n) {
 			import core.checkedint : mulu;
 			import core.exception;
 			import core.stdc.stdlib;
 
 			bool overflow;
-			size_t reqsize = mulu(T.sizeof, nlength, overflow);
+			size_t reqsize = mulu(T.sizeof, n, overflow);
 			if (!overflow) {
-				_length = nlength;
+				_length = n;
 				ptr = cast(T*)realloc(ptr, reqsize);
 			} else
 				onOutOfMemoryErrorNoGC();
@@ -291,7 +302,7 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 
 	static if (!isDynamicArray!T)
 		ref const(Stream) opOpAssign(string op : "~")(inout(T[]) rhs) {
-			static if (__traits(compiles, buf.reserve(buf.length)))
+			static if (is(typeof(buf.reserve(buf.length))))
 				buf.reserve(buf.length + rhs.length);
 			foreach (elem; rhs)
 				this ~= elem;

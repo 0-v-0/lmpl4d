@@ -1,6 +1,7 @@
 module lmpl4d.packer;
 
 import lmpl4d.common;
+import std.meta;
 
 struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	AOutputBuf!Stream buf;
@@ -36,13 +37,13 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	 * Returns:
 	 *  self, i.e. for method chaining.
 	 */
-	ref TThis pack(T)(in T value) if (is(Unqual!T == bool)) {
+	ref TThis pack(T)(T value) if (is(Unqual!T == bool)) {
 		buf ~= value ? Format.TRUE : Format.FALSE;
 		return this;
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isUnsigned!T && !is(Unqual!T == enum)) {
+	ref TThis pack(T)(T value) if (isUnsigned!T && !is(T == enum)) {
 		if (value < (1 << 8)) {
 			if (value < (1 << 7)) {
 				// fixnum
@@ -71,8 +72,8 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value)
-	if (isSigned!T && isIntegral!T && !is(Unqual!T == enum)) {
+	ref TThis pack(T)(T value)
+	if (isSigned!T && isIntegral!T && !is(T == enum)) {
 		if (value < -(1 << 5)) {
 			if (value < -(1 << 15)) {
 				static if (T.sizeof == 8) {
@@ -127,7 +128,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isFloatingPoint!T && !is(Unqual!T == enum)) {
+	ref TThis pack(T)(in T value) if (isFloatingPoint!T && !is(T == enum)) {
 		static if (is(Unqual!T == float)) {
 			buf ~= Format.FLOAT;
 			buf ~= toBE(_f(value).i);
@@ -145,15 +146,13 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		return this;
 	}
 
-	ref TThis pack(T)(in T value) if (is(Unqual!T == enum)) {
-		pack(cast(OriginalType!T)value);
-		return this;
-	}
+	ref TThis pack(T)(in T value) if (is(T == enum))
+		=> pack(cast(OriginalType!T)value);
 
 	/*
 	 * Serializes the nil value.
 	*/
-	ref TThis pack(T)(in T) if (is(Unqual!T == typeof(null))) {
+	ref TThis pack(T)(T) if (is(T : typeof(null))) {
 		buf ~= Format.NIL;
 		return this;
 	}
@@ -213,18 +212,12 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isSomeChar!T && !is(Unqual!T == enum)) {
-		static if (T.sizeof == 1)
-			return pack(cast(ubyte)value);
-		else static if (T.sizeof == 2)
-			return pack(cast(ushort)value);
-		else
-			return pack(cast(uint)value);
-	}
+	ref TThis pack(T)(in T value) if (isSomeChar!T && !is(T == enum))
+		=> pack(cast(AliasSeq!(ubyte, ushort, uint)[T.sizeof / 2])value);
 
 	version (NoPackingStruct) {
 	} else {
-		ref TThis pack(T)(in T obj) if (is(Unqual!T == struct)) {
+		ref TThis pack(T)(in T obj) if (is(T == struct)) {
 			if (cast(const)T.init == obj) {
 				beginArray(0);
 				return this;
@@ -294,7 +287,6 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		case 16:
 			return packExtFixed(Format.EXT + 4);
 		default:
-			break;
 		}
 
 		begin!(Format.EXT8, Format.EXT16, 0)(data.length);
@@ -349,10 +341,8 @@ unittest  // unique value
 {
 	mixin DefinePacker;
 
-	enum ubyte[] result = [Format.NIL, Format.TRUE, Format.FALSE];
-
 	packer.pack(null, true, false);
-	assert(packer[] == result);
+	assert(packer[] == cast(ubyte[])[Format.NIL, Format.TRUE, Format.FALSE]);
 }
 // dfmt off
 unittest {
