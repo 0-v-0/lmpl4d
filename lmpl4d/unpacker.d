@@ -132,7 +132,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 					}
 				}
 			default:
-				break;
 			}
 			rollback(0, T.stringof, cast(Format)header);
 		}
@@ -277,9 +276,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			}
 		}
 		alias U = typeof(T.init[0]);
-		enum RawBytes = isRawByte!U;
-		static if (RawBytes)
-			long length = beginRaw();
+		static if (U.sizeof == 1)
+			long length = beginBin();
 		else
 			long length = beginArray();
 		version (D_Exceptions) {
@@ -315,7 +313,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			}
 		if (length == 0)
 			return array;
-		static if (RawBytes) {
+		static if (U.sizeof == 1) {
 			check(length);
 			static if (isStaticArray!T)
 				array = (cast(U[])read(length))[0 .. T.length];
@@ -337,9 +335,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			else
 				return unpackNil(array);
 		}
-		enum RawBytes = isRawByte!U;
-		static if (RawBytes)
-			long length = beginRaw();
+		static if (U.sizeof == 1)
+			long length = beginBin();
 		else
 			long length = beginArray();
 		if (length < 0)
@@ -356,7 +353,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			}
 		if (length == 0)
 			return true;
-		static if (RawBytes) {
+		static if (U.sizeof == 1) {
 			if (!canRead(length)) {
 				pos = spos;
 				return false;
@@ -400,8 +397,6 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (length < 0)
 			throw new MessagePackException(
 				"Attempt to unpack with non-compatible type: expected = map");
-		if (length == 0)
-			return array;
 
 		foreach (i; 0 .. length) {
 			K k = unpack!K;
@@ -530,7 +525,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	/*
 	 * Deserializes type-information of raw type.
 	 */
-	alias beginRaw = begin!();
+	alias beginBin = begin!();
 
 	/**
 	 * Deserializes the type-information of container.

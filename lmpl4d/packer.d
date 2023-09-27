@@ -37,7 +37,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	 * Returns:
 	 *  self, i.e. for method chaining.
 	 */
-	ref TThis pack(T)(T value) if (is(Unqual!T == bool)) {
+	ref TThis pack(bool value) {
 		buf ~= value ? Format.TRUE : Format.FALSE;
 		return this;
 	}
@@ -47,10 +47,10 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		if (value < (1 << 8)) {
 			if (value < (1 << 7)) {
 				// fixnum
-				buf ~= take8from(value);
+				buf ~= cast(ubyte)value;
 			} else {
 				buf ~= Format.UINT8;
-				buf ~= take8from(value);
+				buf ~= cast(ubyte)value;
 			}
 		} else if (value < (1 << 16)) {
 			buf ~= Format.UINT16;
@@ -90,16 +90,16 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 				buf ~= toBE(cast(ushort)value);
 			} else {
 				buf ~= Format.INT8;
-				buf ~= take8from(value);
+				buf ~= cast(ubyte)value;
 			}
 		} else if (value < (1 << 7)) {
 			// fixnum
-			buf ~= take8from(value);
+			buf ~= cast(ubyte)value;
 		} else static if (T.sizeof == 8) {
 			if (value < (1L << 16)) {
 				if (value < (1L << 8)) {
 					buf ~= Format.UINT8;
-					buf ~= take8from(value);
+					buf ~= cast(ubyte)value;
 				} else {
 					buf ~= Format.UINT16;
 					buf ~= toBE(cast(ushort)value);
@@ -114,7 +114,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		} else {
 			if (value < (1 << 8)) {
 				buf ~= Format.UINT8;
-				buf ~= take8from(value);
+				buf ~= cast(ubyte)value;
 			} else if (value < (1 << 16)) {
 				buf ~= Format.UINT16;
 				buf ~= toBE(cast(ushort)value);
@@ -152,7 +152,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	/*
 	 * Serializes the nil value.
 	*/
-	ref TThis pack(T)(T) if (is(T : typeof(null))) {
+	ref TThis pack(typeof(null)) {
 		buf ~= Format.NIL;
 		return this;
 	}
@@ -173,14 +173,12 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 			return pack(null);
 
 		// Raw bytes
-		static if (isRawByte!(typeof(T.init[0]))) {
-			auto raw = cast(ubyte[])array;
-
-			static if (isSomeChar!(typeof(T.init[0])))
-				beginStr(raw.length);
+		static if (typeof(T.init[0]).sizeof == 1) {
+			static if (is(T : const(char)[]))
+				beginStr(array.length);
 			else
-				beginRaw(raw.length);
-			buf ~= raw;
+				beginBin(array.length);
+			buf ~= cast(const(ubyte)[])array;
 		} else {
 			beginArray(array.length);
 			foreach (elem; array)
@@ -301,7 +299,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		if (len <= ushort.max) {
 			static if (llen) {
 				if (len < llen) {
-					buf ~= take8from(f | cast(ubyte)len);
+					buf ~= cast(ubyte)(f | cast(ubyte)len);
 					return this;
 				}
 			}
@@ -325,7 +323,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	/*
 	 * Serializes raw type-information to buf for binary type.
 	 */
-	alias beginRaw = begin!(Format.BIN8, Format.BIN16, 0);
+	alias beginBin = begin!(Format.BIN8, Format.BIN16, 0);
 
 	/// ditto
 	alias beginStr = begin!(Format.STR, Format.STR16, 32);
@@ -351,38 +349,24 @@ unittest {
 
 		enum : ulong { A = ubyte.max, B = ushort.max, C = uint.max, D = ulong.max }
 
-		static UTest[][] utests = [
+		enum UTest[][] utests = [
 			[{Format.UINT8, A}],
 			[{Format.UINT8, A}, {Format.UINT16, B}],
 			[{Format.UINT8, A}, {Format.UINT16, B}, {Format.UINT32, C}],
 			[{Format.UINT8, A}, {Format.UINT16, B}, {Format.UINT32, C}, {Format.UINT64, D}],
 		];
+		alias Types = AliasSeq!(ubyte, ushort, uint, ulong);
 
-		foreach (I, T; AliasSeq!(ubyte, ushort, uint, ulong)) {
-			foreach (i, test; utests[I]) {
+		foreach (I, T; Types) {
+			static foreach (i, test; utests[I]) {{
 				mixin DefinePacker;
 
 				packer.pack(cast(T)test.value);
 				assert(packer.buf[0] == test.format);
 
-				switch (i) {
-				case 0:
-					const answer = take8from(test.value);
-					assert(memcmp(&packer.buf[1], &answer, ubyte.sizeof) == 0);
-					break;
-				case 1:
-					const answer = toBE(cast(ushort)test.value);
-					assert(memcmp(&packer.buf[1], &answer, ushort.sizeof) == 0);
-					break;
-				case 2:
-					const answer = toBE(cast(uint)test.value);
-					assert(memcmp(&packer.buf[1], &answer, uint.sizeof) == 0);
-					break;
-				default:
-					const answer = toBE(cast(ulong)test.value);
-					assert(memcmp(&packer.buf[1], &answer, ulong.sizeof) == 0);
-				}
-			}
+				const answer = toBE(cast(Types[i])test.value);
+				assert(memcmp(&packer.buf[1], &answer, Types[i].sizeof) == 0);
+			}}
 		}
 	}
 	{ // int *
@@ -390,38 +374,24 @@ unittest {
 
 		enum : long { A = byte.min, B = short.min, C = int.min, D = long.min }
 
-		static STest[][] stests = [
+		enum STest[][] stests = [
 			[{Format.INT8, A}],
 			[{Format.INT8, A}, {Format.INT16, B}],
 			[{Format.INT8, A}, {Format.INT16, B}, {Format.INT32, C}],
 			[{Format.INT8, A}, {Format.INT16, B}, {Format.INT32, C}, {Format.INT64, D}],
 		];
+		alias Types = AliasSeq!(byte, short, int, long);
 
-		foreach (I, T; AliasSeq!(byte, short, int, long)) {
-			foreach (i, test; stests[I]) {
+		foreach (I, T; Types) {
+			static foreach (i, test; stests[I]) {{
 				mixin DefinePacker;
 
 				packer.pack(cast(T)test.value);
 				assert(packer.buf[0] == test.format);
 
-				switch (i) {
-				case 0:
-					const answer = take8from(test.value);
-					assert(memcmp(&packer.buf[1], &answer, byte.sizeof) == 0);
-					break;
-				case 1:
-					const answer = toBE(cast(ushort)test.value);
-					assert(memcmp(&packer.buf[1], &answer, short.sizeof) == 0);
-					break;
-				case 2:
-					const answer = toBE(cast(uint)test.value);
-					assert(memcmp(&packer.buf[1], &answer, int.sizeof) == 0);
-					break;
-				default:
-					const answer = toBE(cast(ulong)test.value);
-					assert(memcmp(&packer.buf[1], &answer, long.sizeof) == 0);
-				}
-			}
+				const answer = toBE(cast(Types[i])test.value);
+				assert(memcmp(&packer.buf[1], &answer, Types[i].sizeof) == 0);
+			}}
 		}
 	}
 }
@@ -509,11 +479,11 @@ unittest  // pointer
 			break;
 		case 1:
 			const answer = toBE(cast(ulong)*ptests[I].p1);
-			assert(memcmp(&packer.buf[1], &answer, long.sizeof) == 0);
+			assert(memcmp(&packer.buf[1], &answer, ulong.sizeof) == 0);
 			break;
 		default:
 			const answer = toBE(cast(ulong)_d(*ptests[I].p2).i);
-			assert(memcmp(&packer.buf[1], &answer, double.sizeof) == 0);
+			assert(memcmp(&packer.buf[1], &answer, ulong.sizeof) == 0);
 		}
 	}
 }
@@ -556,26 +526,16 @@ unittest {
 
 	foreach (I, Name; AliasSeq!("Array", "Map", "Str")) {
 		auto test = ctests[I];
+		alias Types = AliasSeq!(ubyte, ushort, uint);
 
-		foreach (i, T; AliasSeq!(ubyte, ushort, uint)) {
+		foreach (i, T; Types) {
 			mixin DefinePacker;
 			mixin("packer.begin" ~ Name ~ "(i ? test[i].value : A);");
 
 			assert(packer.buf[0] == test[i].format);
 
-			switch (i) {
-			case 0:
-				auto answer = take8from(test[i].value);
-				assert(memcmp(&packer.buf[0], &answer, ubyte.sizeof) == 0, Name);
-				break;
-			case 1:
-				auto answer = toBE(cast(ushort)test[i].value);
-				assert(memcmp(&packer.buf[1], &answer, ushort.sizeof) == 0, Name);
-				break;
-			default:
-				auto answer = toBE(cast(uint)test[i].value);
-				assert(memcmp(&packer.buf[1], &answer, uint.sizeof) == 0, Name);
-			}
+			const answer = toBE(cast(T)test[i].value);
+			assert(memcmp(&packer.buf[i ? 1 : 0], &answer, T.sizeof) == 0);
 		}
 	}
 

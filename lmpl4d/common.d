@@ -2,33 +2,31 @@ module lmpl4d.common;
 
 import std.container.array;
 
-// dfmt off
-package import
-	std.meta,
-	std.traits,
-	std.typecons;
+package import std.meta,
+std.traits,
+std.typecons;
 
+version (NoPackingStruct) {
+} else {
+	enum nonPacked; // @suppress(dscanner.style.phobos_naming_convention)
 
-version (NoPackingStruct) {}
-else {
-	struct nonPacked {} // @suppress(dscanner.style.phobos_naming_convention)
-
-	package enum isPackedField(alias field) = staticIndexOf!(nonPacked, __traits(getAttributes, field)) == -1
+	package enum isPackedField(alias field) = staticIndexOf!(nonPacked,
+			__traits(getAttributes, field)) == -1
 		&& !isSomeFunction!field;
 
 	/**
 	 * Get the number of member to serialize.
 	 */
-	size_t NumOfSerializingMembers(T...)() {
-		size_t n;
-		foreach (t; T)
-			n += Filter!(isPackedField, t.tupleof).length;
-		return n;
+	template NumOfSerializingMembers(T...) {
+		static if (T.length)
+			enum NumOfSerializingMembers = Filter!(isPackedField, T[0].tupleof).length +
+				NumOfSerializingMembers!(T[1 .. $]);
+		else
+			enum NumOfSerializingMembers = 0;
 	}
 }
 
 package:
-enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(T == enum);
 
 version (EnableReal) {
 	enum EnableReal = true;
@@ -53,40 +51,6 @@ version (EnableReal) {
 	}
 } else
 	enum EnableReal = false;
-
-/** For float/double type (de)serialization */
-union _f { float f; uint i; }
-
-union _d { double f; ulong i; }
-
-// dfmt on
-
-/**
- * For real type (de)serialization
- *
- * 80-bit real is padded to 12 bytes(Linux) and 16 bytes(Mac).
- * http://lists.puremagic.com/pipermail/digitalmars-d/2010-June/077394.html
- */
-union _r {
-	real f;
-
-	struct {
-		ulong fraction;
-		ushort exponent; // includes sign
-	}
-}
-
-enum isRawByte(T) = is(Unqual!T : ubyte) || isSomeChar!T;
-
-/**
- * Gets asterisk string from pointer type
- */
-template AsteriskOf(T) {
-	static if (is(T P == U*, U))
-		enum AsteriskOf = "*" ~ AsteriskOf!U;
-	else
-		enum AsteriskOf = "";
-}
 
 version (unittest) {
 	struct SimpleArray(T) {
@@ -152,29 +116,9 @@ version (LittleEndian)
 else
 	T toBE(T)(in T value) if (isIntegral!T) => value;
 
-/*
-* Takes 8bit from $(D_PARAM value)
-*
-* Params:
-*  value = the content to take.
-*
-* Returns:
-*  the 8bit value corresponding $(D_PARAM bit) width.
-*/
-ubyte take8from(T)(T value) => cast(ubyte)value;
+	public:
 
-unittest {
-	foreach (Int; AliasSeq!(ubyte, ushort, uint, ulong)) {
-		assert(take8from(cast(Int)0x01) == 0x01);
-		assert(take8from(cast(Int)0x0123) == 0x23);
-		assert(take8from(cast(Int)0x01234567) == 0x67);
-		assert(take8from(cast(Int)0x0123456789abcdef) == 0xef);
-	}
-}
-
-public:
-
-enum isInputBuffer(R, E) = __traits(compiles, (R r, size_t i) { E e = r[i++]; });
+	enum isInputBuffer(R, E) = __traits(compiles, (R r, size_t i) { E e = r[i++]; });
 version (D_TypeInfo)
 	enum isOutputBuffer(R, E) =
 		__traits(compiles, (R r, E e) { r.reserve(1); r ~= e; r = R(&r[0], 1, 1); }) ||
@@ -301,7 +245,7 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 	}
 
 	static if (!isDynamicArray!T)
-		ref const(Stream) opOpAssign(string op : "~")(inout(T[]) rhs) {
+		ref const(Stream) opOpAssign(string op : "~")(in T[] rhs) {
 			static if (is(typeof(buf.reserve(buf.length))))
 				buf.reserve(buf.length + rhs.length);
 			foreach (elem; rhs)
@@ -340,10 +284,47 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 	alias buf this;
 }
 
+package:
+enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(T == enum);
+
+/** For float/double type (de)serialization */
+union _f {
+	float f;
+	uint i;
+}
+
+union _d {
+	double f;
+	ulong i;
+}
+
+/**
+ * For real type (de)serialization
+ *
+ * 80-bit real is padded to 12 bytes(Linux) and 16 bytes(Mac).
+ * http://lists.puremagic.com/pipermail/digitalmars-d/2010-June/077394.html
+ */
+union _r {
+	real f;
+
+	struct {
+		ulong fraction;
+		ushort exponent; // includes sign
+	}
+}
+/**
+ * Gets asterisk string from pointer type
+ */
+template AsteriskOf(T) {
+	static if (is(T P == U*, U))
+		enum AsteriskOf = "*" ~ AsteriskOf!U;
+	else
+		enum AsteriskOf = "";
+}
+
 version (unittest) {
 	import core.stdc.string;
 
-package:
 	template DefinePacker() {
 		version (D_BetterC)
 			alias Array = SimpleArray;
@@ -358,7 +339,7 @@ package:
 		auto unpacker = Unpacker!()(packer[]);
 		static if (is(typeof(test))) {
 			auto result = unpacker.unpack!(typeof(test));
-			auto testfunc = {
+			int testfunc = {
 				version (D_BetterC)
 					assert(result == test);
 				else {
