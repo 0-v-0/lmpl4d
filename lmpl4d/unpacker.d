@@ -257,13 +257,13 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 	}
 
-	/// ditto
-	ref typeof(this) unpack(Types...)(ref Types objects) if (Types.length > 1) {
+	ref typeof(this) unpackTo(Types...)(ref Types objects) {
 		foreach (i, T; Types)
 			objects[i] = unpack!T;
 		return this;
 	}
 
+	/// ditto
 	T unpack(T)() if (isSomeArray!T) {
 		if (checkNil()) {
 			static if (isStaticArray!T) {
@@ -385,9 +385,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	T unpack(T)() if (isAssociativeArray!T) {
-		alias K = typeof(T.init.keys[0]),
-		V = typeof(T.init.values[0]);
+	T unpack(T : V[K], K, V)() {
 		T array;
 
 		if (unpackNil(array))
@@ -431,7 +429,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		foreach (i, T; Types)
 			try
 				objects[i] = unpack!T;
-			catch (Exception e) {
+			catch (Exception) {
 				pos = spos;
 				return false;
 			}
@@ -455,7 +453,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		foreach (i, T; Types)
 			try
 				objects[i] = unpack!T;
-			catch (Exception e) {
+			catch (Exception) {
 				pos = spos;
 				return false;
 			}

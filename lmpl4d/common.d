@@ -240,7 +240,7 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 	@property ref const(Stream) buf() const => *arr;
 
 	Stream* arr;
-	this(ref Stream array) {
+	this(ref Stream array) @trusted {
 		arr = &array;
 	}
 
