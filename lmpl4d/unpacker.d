@@ -764,7 +764,7 @@ unittest {
 
 		mixin TestUnpacker;
 
-		unpacker.unpack(resultF, resultE);
+		unpacker.unpackTo(resultF, resultE);
 		assert(f == resultF);
 		assert(e == resultE);
 	}
