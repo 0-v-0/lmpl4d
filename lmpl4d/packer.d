@@ -8,8 +8,6 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 
 	@property auto opSlice() => buf[];
 
-	private alias TThis = typeof(this);
-
 	this(ref Stream stream) {
 		buf = AOutputBuf!Stream(stream);
 	}
@@ -37,13 +35,13 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	 * Returns:
 	 *  self, i.e. for method chaining.
 	 */
-	ref TThis pack(bool value) {
+	ref pack(bool value) {
 		buf ~= value ? Format.TRUE : Format.FALSE;
 		return this;
 	}
 
 	/// ditto
-	ref TThis pack(T)(T value) if (isUnsigned!T && !is(T == enum)) {
+	ref pack(T)(T value) if (isUnsigned!T && !is(T == enum)) {
 		if (value < (1 << 8)) {
 			if (value < (1 << 7)) {
 				// fixnum
@@ -72,7 +70,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(T value)
+	ref pack(T)(T value)
 	if (isSigned!T && isIntegral!T && !is(T == enum)) {
 		if (value < -(1 << 5)) {
 			if (value < -(1 << 15)) {
@@ -128,7 +126,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isFloatingPoint!T && !is(T == enum)) {
+	ref pack(T)(in T value) if (isFloatingPoint!T && !is(T == enum)) {
 		static if (is(Unqual!T == float)) {
 			buf ~= Format.FLOAT;
 			buf ~= toBE(_f(value).i);
@@ -146,18 +144,18 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		return this;
 	}
 
-	ref TThis pack(T)(in T value) if (is(T == enum))
+	ref pack(T)(in T value) if (is(T == enum))
 		=> pack(cast(OriginalType!T)value);
 
 	/*
 	 * Serializes the nil value.
 	*/
-	ref TThis pack(typeof(null)) {
+	ref pack(typeof(null)) {
 		buf ~= Format.NIL;
 		return this;
 	}
 
-	ref TThis pack(T)(in T value) if (isPointer!T) {
+	ref pack(T)(in T value) if (isPointer!T) {
 		if (value is null)
 			buf ~= Format.NIL;
 		else
@@ -166,7 +164,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T array) if (isSomeArray!T) {
+	ref pack(T)(in T array) if (isSomeArray!T) {
 		import std.range;
 
 		if (array.empty)
@@ -188,7 +186,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T array) if (isAssociativeArray!T) {
+	ref pack(T)(in T array) if (isAssociativeArray!T) {
 		if (!array)
 			return pack(null);
 
@@ -202,7 +200,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(Types...)(auto ref const Types objects) if (Types.length > 1) {
+	ref pack(Types...)(auto ref const Types objects) if (Types.length > 1) {
 		foreach (i, T; Types)
 			pack(objects[i]);
 
@@ -210,12 +208,12 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis pack(T)(in T value) if (isSomeChar!T && !is(T == enum))
+	ref pack(T)(in T value) if (isSomeChar!T && !is(T == enum))
 		=> pack(cast(AliasSeq!(ubyte, ushort, uint)[T.sizeof / 2])value);
 
 	version (NoPackingStruct) {
 	} else {
-		ref TThis pack(T)(in T obj) if (is(T == struct)) {
+		ref pack(T)(in T obj) if (is(T == struct)) {
 			if (const(T).init == obj) {
 				beginArray(0);
 				return this;
@@ -224,6 +222,20 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 			foreach (f; obj.tupleof)
 				static if (isPackedField!f && __traits(compiles, { pack(f); }))
 					pack(f);
+			return this;
+		}
+
+		/// ditto
+		ref packMap(T)(in T obj) if (is(T == struct)) {
+			if (const(T).init == obj) {
+				beginMap(0);
+				return;
+			}
+			beginMap(NumOfSerializingMembers!T);
+			foreach (i, f; obj.tupleof) {
+				p.pack(__traits(identifier, obj.tupleof[i]));
+				pack(f);
+			}
 			return this;
 		}
 	}
@@ -244,7 +256,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	 * Returns:
 	 *  self, i.e. for method chaining.
 	 */
-	ref TThis packArray(Types...)(auto ref const Types objects) {
+	ref packArray(Types...)(auto ref const Types objects) {
 		beginArray(Types.length);
 		foreach (i, T; Types)
 			pack(objects[i]);
@@ -254,7 +266,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref TThis packMap(Types...)(auto ref const Types objects)
+	ref packMap(Types...)(auto ref const Types objects)
 	if ((Types.length & 1) == 0) {
 		beginMap(Types.length >> 1);
 		foreach (i, T; Types)
@@ -263,9 +275,9 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		return this;
 	}
 
-	ref TThis packExt(in byte type, const ubyte[] data) return
+	ref packExt(in byte type, const ubyte[] data) return
 	in (data.length <= uint.max) {
-		ref TThis packExtFixed(int fmt) {
+		ref packExtFixed(int fmt) {
 			buf ~= cast(ubyte)fmt;
 			buf ~= type;
 			buf ~= data;
@@ -294,7 +306,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 		return this;
 	}
 
-	ref TThis begin(Format f, Format f16, size_t llen = 16)(size_t len)
+	ref begin(Format f, Format f16, size_t llen = 16)(size_t len)
 	in (len <= uint.max, "Data is too large to pack") {
 		if (len <= ushort.max) {
 			static if (llen) {
@@ -464,7 +476,7 @@ unittest  // pointer
 	auto v1 = long.min;
 	auto v2 = double.max;
 
-	foreach (I; AliasSeq!(0, 1, 2)) {
+	static foreach (I; 0 .. 3) {
 		mixin DefinePacker;
 
 		mixin("ptests[I].p", I, " = &v", I, ";");

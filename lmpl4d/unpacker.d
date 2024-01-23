@@ -257,7 +257,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 	}
 
-	ref typeof(this) unpackTo(Types...)(ref Types objects) {
+	ref unpackTo(Types...)(ref Types objects) {
 		foreach (i, T; Types)
 			objects[i] = unpack!T;
 		return this;
@@ -277,9 +277,9 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 		alias U = typeof(T.init[0]);
 		static if (U.sizeof == 1)
-			long length = beginBin();
+			const length = beginBin();
 		else
-			long length = beginArray();
+			const length = beginArray();
 		version (D_Exceptions) {
 			import std.conv : text;
 
@@ -336,9 +336,9 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 				return unpackNil(array);
 		}
 		static if (U.sizeof == 1)
-			long length = beginBin();
+			const length = beginBin();
 		else
-			long length = beginArray();
+			const length = beginArray();
 		if (length < 0)
 			return false;
 		static if (__traits(compiles, buf.length))
@@ -391,7 +391,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (unpackNil(array))
 			return array;
 
-		long length = beginMap();
+		const length = beginMap();
 		if (length < 0)
 			throw new MessagePackException(
 				"Attempt to unpack with non-compatible type: expected = map");
@@ -419,7 +419,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	 */
 	bool unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1) {
 		const spos = pos;
-		long length = beginArray();
+		const length = beginArray();
 		if (length != Types.length) {
 			// the number of deserialized objects is mismatched
 			pos = spos;
@@ -443,7 +443,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		static assert(Types.length % 2 == 0, "The number of arguments must be even");
 
 		const spos = pos;
-		long length = beginMap();
+		const length = beginMap();
 		if (length != Types.length >> 1) {
 			// the number of deserialized objects is mismatched
 			pos = spos;
@@ -466,7 +466,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		if (unpackNil(array))
 			return true;
 
-		long length = beginMap();
+		const length = beginMap();
 		if (length == 0)
 			return true;
 		if (length < 0)
@@ -543,7 +543,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	} else {
 		T unpack(T)() if (is(T == struct)) {
 			T val;
-			long len = beginArray();
+			const len = beginArray();
 			version (D_Exceptions) {
 				if (len < 0)
 					throw new MessagePackException(
@@ -561,7 +561,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 
 		bool unpackObj(T)(ref T obj) if (is(T == struct)) {
-			long len = beginArray();
+			const len = beginArray();
 			if (len == 0)
 				return true;
 			if (len < 0)

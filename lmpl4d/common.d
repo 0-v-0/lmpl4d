@@ -10,7 +10,7 @@ version (NoPackingStruct) {
 } else {
 	enum nonPacked; // @suppress(dscanner.style.phobos_naming_convention)
 
-	package enum isPackedField(alias field) = staticIndexOf!(nonPacked,
+	enum isPackedField(alias field) = staticIndexOf!(nonPacked,
 			__traits(getAttributes, field)) == -1
 		&& !isSomeFunction!field;
 
@@ -317,7 +317,7 @@ union _r {
  */
 template AsteriskOf(T) {
 	static if (is(T P == U*, U))
-		enum AsteriskOf = "*" ~ AsteriskOf!U;
+		enum AsteriskOf = '*' ~ AsteriskOf!U;
 	else
 		enum AsteriskOf = "";
 }
