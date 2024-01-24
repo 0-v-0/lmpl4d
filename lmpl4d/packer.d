@@ -70,8 +70,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref pack(T)(T value)
-	if (isSigned!T && isIntegral!T && !is(T == enum)) {
+	ref pack(T)(T value) if (isSigned!T && isIntegral!T && !is(T == enum)) {
 		if (value < -(1 << 5)) {
 			if (value < -(1 << 15)) {
 				static if (T.sizeof == 8) {
@@ -227,14 +226,14 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 
 		/// ditto
 		ref packMap(T)(in T obj) if (is(T == struct)) {
-			if (const(T).init == obj) {
+			if (const(T).init == obj)
 				beginMap(0);
-				return;
-			}
-			beginMap(NumOfSerializingMembers!T);
-			foreach (i, f; obj.tupleof) {
-				p.pack(__traits(identifier, obj.tupleof[i]));
-				pack(f);
+			else {
+				beginMap(NumOfSerializingMembers!T);
+				foreach (i, f; obj.tupleof) {
+					p.pack(__traits(identifier, obj.tupleof[i]));
+					pack(f);
+				}
 			}
 			return this;
 		}
@@ -266,8 +265,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	}
 
 	/// ditto
-	ref packMap(Types...)(auto ref const Types objects)
-	if ((Types.length & 1) == 0) {
+	ref packMap(Types...)(auto ref const Types objects) if ((Types.length & 1) == 0) {
 		beginMap(Types.length >> 1);
 		foreach (i, T; Types)
 			pack(objects[i]);
