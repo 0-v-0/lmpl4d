@@ -213,7 +213,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	version (NoPackingStruct) {
 	} else {
 		ref pack(T)(in T obj) if (is(T == struct)) {
-			if (const(T).init == obj) {
+			if (obj is const(T).init) {
 				beginArray(0);
 				return this;
 			}
@@ -226,7 +226,7 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 
 		/// ditto
 		ref packMap(T)(in T obj) if (is(T == struct)) {
-			if (const(T).init == obj)
+			if (obj is const(T).init)
 				beginMap(0);
 			else {
 				beginMap(NumOfSerializingMembers!T);

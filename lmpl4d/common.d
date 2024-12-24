@@ -147,17 +147,9 @@ unittest {
 
 version (D_Exceptions) {
 	/**
-	 * $(D MessagePackException) is a root Exception for MessagePack related operation.
+	 * `MessagePackException` is a root Exception for MessagePack related operation.
 	 */
 	class MessagePackException : Exception {
-		this(string msg) pure {
-			super(msg);
-		}
-	}
-	/**
-	 * $(D UnpackException) is thrown on deserialization failure
-	 */
-	class UnpackException : MessagePackException {
 		this(string msg) pure {
 			super(msg);
 		}

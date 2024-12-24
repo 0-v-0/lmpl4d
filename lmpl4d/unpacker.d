@@ -2,6 +2,8 @@ module lmpl4d.unpacker;
 
 import lmpl4d.common;
 
+private alias Ex = MessagePackException;
+
 struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	Stream buf;
 	size_t pos;
@@ -13,15 +15,14 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		import std.conv : text;
 
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
-
 			pos -= size + 1;
-			throw new MessagePackException(text("Attempt to unpack with non-compatible type: ",
+			throw new Ex(text("Attempt to unpack with non-compatible type: ",
 					actual ? text("expected = ", expected, ", got = ", actual) : expected));
 		}
 
 		void check(size_t size = 1) {
 			if (!canRead(size))
-				throw new UnpackException(text("Insufficient buffer: ", size, " bytes required"));
+				throw new Ex(text("Insufficient buffer: ", size, " bytes required"));
 		}
 	} else {
 		void rollback(size_t size, string expected, Format actual = Format.NONE) {
@@ -39,7 +40,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			T val;
 			version (D_Exceptions) {
 				if (!unpackNil(val))
-					throw new UnpackException("Can't deserialize a pointer that is not null");
+					throw new Ex("Can't deserialize a pointer that is not null");
 			}
 			return val;
 		} else static if (isSomeChar!T)
@@ -140,9 +141,14 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 
 	T unpack(T)(T defValue) nothrow
 	if (is(T == enum) || isPointer!T || isTuple!T || isScalarType!T) {
-		static if (is(T == enum))
-			return cast(T)unpack(cast(OriginalType!T)defValue);
-		else static if (isPointer!T) {
+		static if (is(T == enum)) {
+			alias O = OriginalType!T;
+			static if (isSomeArray!O) {
+				unpack(cast(O)defValue);
+				return defValue;
+			} else
+				return cast(T)unpack(cast(O)defValue);
+		} else static if (isPointer!T) {
 			T val;
 			return unpackNil(val) ? val : defValue;
 		} else static if (isTuple!T) {
@@ -284,15 +290,15 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			import std.conv : text;
 
 			if (length < 0)
-				throw new MessagePackException(
+				throw new Ex(
 					"Attempt to unpack with non-compatible type or buffer is insufficient: expected = array");
 			static if (isStaticArray!T)
 				if (length != T.length)
-					throw new MessagePackException(text("Static array length mismatch: got = ", length,
+					throw new Ex(text("Static array length mismatch: got = ", length,
 							"expected = ", T.length));
 			static if (__traits(compiles, buf.length))
 				if (pos + length > buf.length)
-					throw new MessagePackException(text("Invalid array size in byte stream: Length (", length,
+					throw new Ex(text("Invalid array size in byte stream: Length (", length,
 							") is larger than internal buffer size (", buf.length, ")"));
 		} else {
 			if (length < 0)
@@ -326,8 +332,8 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	}
 
 	bool unpack(T)(ref T array) nothrow if (isSomeArray!T) {
-
 		alias U = typeof(T.init[0]);
+
 		const spos = pos;
 		if (checkNil()) {
 			static if (isStaticArray!T)
@@ -393,7 +399,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 
 		const length = beginMap();
 		if (length < 0)
-			throw new MessagePackException(
+			throw new Ex(
 				"Attempt to unpack with non-compatible type: expected = map");
 
 		foreach (i; 0 .. length) {
@@ -546,7 +552,7 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			const len = beginArray();
 			version (D_Exceptions) {
 				if (len < 0)
-					throw new MessagePackException(
+					throw new Ex(
 						"Attempt to unpack with non-compatible type: expected = array");
 			}
 			if (len > 0) {
