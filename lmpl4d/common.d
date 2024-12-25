@@ -14,9 +14,9 @@ version (NoPackingStruct) {
 			__traits(getAttributes, field)) == -1
 		&& !isSomeFunction!field;
 
-	/**
-	 * Get the number of member to serialize.
-	 */
+	/++
+		Get the number of member to serialize.
+	+/
 	template NumOfSerializingMembers(T...) {
 		static if (T.length)
 			enum NumOfSerializingMembers = Filter!(isPackedField, T[0].tupleof).length +
@@ -146,24 +146,26 @@ unittest {
 }
 
 version (D_Exceptions) {
-	/**
-	 * `MessagePackException` is a root Exception for MessagePack related operation.
-	 */
+	/++
+		`MessagePackException` is a root Exception for MessagePack related operation.
+	+/
 	class MessagePackException : Exception {
 		this(string msg) pure {
 			super(msg);
 		}
 	}
+
+	package alias Ex = MessagePackException;
 }
 
 nothrow @nogc pure:
 
-/**
- * MessagePack type-information format
- *
- * See_Also:
- *  $(LINK2 http://redmine.msgpack.org/projects/msgpack/wiki/FormatSpec, MessagePack Specificaton)
- */
+/++
+MessagePack type-information format
+
+See_Also:
+	[MessagePack Specificaton](http://redmine.msgpack.org/projects/msgpack/wiki/FormatSpec)
++/
 enum Format : ubyte {
 	NONE,
 
@@ -219,9 +221,9 @@ enum Format : ubyte {
 	REAL = 0xd4
 }
 
-/*
- * Calculates the format size of container length.
- */
+/++
+	Calculates the format size of container length.
++/
 size_t calculateSize(size_t length)
 	=> length < 16 ? 0 : length <= ushort.max ? ushort.sizeof : uint.sizeof;
 
@@ -279,7 +281,7 @@ struct AOutputBuf(Stream, T = ubyte) if (isOutputBuffer!(Stream, T)) {
 package:
 enum isSomeArray(T) = (isArray!T || isInstanceOf!(Array, T)) && !is(T == enum);
 
-/** For float/double type (de)serialization */
+/++ For float/double type (de)serialization +/
 union _f {
 	float f;
 	uint i;
@@ -290,12 +292,12 @@ union _d {
 	ulong i;
 }
 
-/**
- * For real type (de)serialization
- *
- * 80-bit real is padded to 12 bytes(Linux) and 16 bytes(Mac).
- * http://lists.puremagic.com/pipermail/digitalmars-d/2010-June/077394.html
- */
+/++
+For real type (de)serialization
+
+80-bit real is padded to 12 bytes(Linux) and 16 bytes(Mac).
+http://lists.puremagic.com/pipermail/digitalmars-d/2010-June/077394.html
++/
 union _r {
 	real f;
 
@@ -304,9 +306,9 @@ union _r {
 		ushort exponent; // includes sign
 	}
 }
-/**
- * Gets asterisk string from pointer type
- */
+/++
+	Gets asterisk string from pointer type
++/
 template AsteriskOf(T) {
 	static if (is(T P == U*, U))
 		enum AsteriskOf = '*' ~ AsteriskOf!U;

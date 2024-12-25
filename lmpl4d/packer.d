@@ -16,12 +16,12 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	 * Serializes argument and writes to stream.
 	 *
 	 * If the argument is the pointer type, dereferences the pointer and serializes pointed value.
-	 * -----
+	 * ---
 	 * int  a = 10;
 	 * int* b = &b;
 	 *
 	 * packer.pack(b);  // serializes 10, not address of a
-	 * -----
+	 * ---
 	 * Serializes nil if the argument of nullable type is null.
 	 *
 	 * NOTE:
@@ -242,10 +242,10 @@ struct Packer(Stream = ubyte[]) if (isOutputBuffer!(Stream, ubyte)) {
 	/**
 	 * Serializes the arguments as container to buf.
 	 *
-	 * -----
+	 * ---
 	 * packer.packArray(true, 1);  // -> [true, 1]
 	 * packer.packMap("Hi", 100);  // -> ["Hi":100]
-	 * -----
+	 * ---
 	 *
 	 * In packMap, the number of arguments must be even.
 	 *

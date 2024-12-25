@@ -2,8 +2,6 @@ module lmpl4d.unpacker;
 
 import lmpl4d.common;
 
-private alias Ex = MessagePackException;
-
 struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	Stream buf;
 	size_t pos;
@@ -410,19 +408,19 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		return array;
 	}
 
-	/**
-	 * Deserializes the container object and assigns to each argument.
-	 *
-	 * These methods check the length. Do rollback if
-	 * the length of arguments is different from length of deserialized object.
-	 *
-	 * In unpackMap, the number of arguments must be even.
-	 *
-	 * Params:
-	 *  objects = the references of object to assign.
-	 *
-	 * Returns: true if succeed
-	 */
+	/++
+		Deserializes the container object and assigns to each argument.
+
+		These methods check the length. Do rollback if
+		the length of arguments is different from length of deserialized object.
+
+		In unpackMap, the number of arguments must be even.
+
+	Params:
+		objects = the references of object to assign.
+
+	Returns: true if succeed
+	+/
 	bool unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1) {
 		const spos = pos;
 		const length = beginArray();
@@ -526,20 +524,19 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 	}
 
-	/*
-	 * Deserializes type-information of raw type.
-	 */
+	/++
+		Deserializes type-information of raw type.
+	+/
 	alias beginBin = begin!();
 
-	/**
-	 * Deserializes the type-information of container.
-	 *
-	 * These methods don't deserialize contents.
-	 * You need to call unpack method to deserialize contents at your own risk.
-	 *
-	 * Returns:
-	 *  the container size.
-	 */
+	/++
+	Deserializes the type-information of container.
+
+	These methods don't deserialize contents.
+	You need to call unpack method to deserialize contents at your own risk.
+
+	Returns: the container size.
+	+/
 	alias beginArray = begin!(Format.ARRAY, 16);
 
 	/// ditto
@@ -586,10 +583,10 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 
 nothrow:
 
-	/**
-	 * Unpacks an EXT value into $(D type) and $(D data).
-	 * Returns: true if succeed
-	 */
+	/++
+		Unpacks an EXT value into `type` and `data`.
+		Returns: true if succeed
+	+/
 	bool unpackExt(T)(ref byte type, ref T data) if (isOutputBuffer!(T, ubyte)) {
 		if (!canRead)
 			return false;
@@ -642,9 +639,9 @@ nothrow:
 
 	ubyte peek() => buf[pos];
 
-	/*
-	 * Reads value from buffer and advances offset.
-	 */
+	/++
+		Reads value from buffer and advances offset.
+	+/
 	ubyte read() => buf[pos++];
 
 	auto read(size_t size) {
@@ -653,24 +650,23 @@ nothrow:
 		return result;
 	}
 
-	/*
-	 * Reads $(D_PARAM T) type value from $(D_PARAM buffer).
-	 *
-	 * Returns:
-	 *  the Endian-converted value.
-	 */
+	/++
+		Reads `T` type value from `buffer`.
+
+	Returns: the Endian-converted value.
+	+/
 	T read(T)() {
 		auto result = toBE(*cast(const T*)&buf[pos]);
 		pos += T.sizeof;
 		return result;
 	}
 
-	/*
-	 * Reading test.
-	 *
-	 * Params:
-	 *  size   = the size to read.
-	 */
+	/++
+		Reading test.
+
+	Params:
+		size = the size to read.
+	+/
 	bool canRead(size_t size = 1) const {
 		static if (__traits(compiles, buf.length))
 			return pos + size <= buf.length;
@@ -678,23 +674,21 @@ nothrow:
 			return true;
 	}
 
-	/*
-	 * Next object is nil?
-	 *
-	 * Returns:
-	 *  true if next object is nil.
-	 */
+	/++
+	Next object is nil?
+
+	Returns: true if next object is nil.
+	+/
 	bool checkNil() => canRead && peek() == Format.NIL;
 
-	/*
-	 * Deserializes nil object and assigns to $(D_PARAM value).
-	 *
-	 * Params:
-	 *  value = the reference of value to assign.
-	 *
-	 * Returns:
-	 *  true if next object is nil.
-	 */
+	/++
+		Deserializes nil object and assigns to `value`.
+
+	Params:
+		value = the reference of value to assign.
+
+	Returns: true if next object is nil.
+	+/
 	bool unpackNil(T)(ref T value) {
 		if (!canRead)
 			return false;
