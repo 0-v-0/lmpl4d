@@ -2,6 +2,14 @@ module lmpl4d.unpacker;
 
 import lmpl4d.common;
 
+enum MsgPackErr {
+	ok,
+	insufficientBuffer,
+	invalidType,
+	arraySizeMismatch,
+	mapSizeMismatch,
+}
+
 struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 	Stream buf;
 	size_t pos;
@@ -137,22 +145,27 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		assert(0, "Unsupported type");
 	}
 
-	T unpack(T)(T defValue) nothrow
-	if (is(T == enum) || isPointer!T || isTuple!T || isScalarType!T) {
+	T unpack(T)(ref T defValue) nothrow
+	if (is(T == enum) || isTuple!T) {
 		static if (is(T == enum)) {
 			alias O = OriginalType!T;
 			static if (isSomeArray!O) {
-				unpack(cast(O)defValue);
+				() @trusted { unpack(*cast(O*)&defValue); }();
 				return defValue;
 			} else
 				return cast(T)unpack(cast(O)defValue);
-		} else static if (isPointer!T) {
-			T val;
-			return unpackNil(val) ? val : defValue;
 		} else static if (isTuple!T) {
 			T val;
 			unpackArray!(T.Types)(val.field);
 			return val;
+		}
+	}
+
+	T unpack(T)(T defValue) nothrow
+	if ((isPointer!T || isScalarType!T) && !is(T == enum)) {
+		static if (isPointer!T) {
+			T val;
+			return unpackNil(val) == MsgPackErr.ok ? val : defValue;
 		} else static if (isSomeChar!T)
 			return cast(T)unpack(cast(AliasSeq!(ubyte, ushort, uint)[T.sizeof / 2])defValue);
 		else static if (isScalarType!T) {
@@ -281,28 +294,28 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		}
 		alias U = typeof(T.init[0]);
 		static if (U.sizeof == 1)
-			const length = beginBin();
+			const len = beginBin();
 		else
-			const length = beginArray();
+			const len = beginArray();
 		version (D_Exceptions) {
 			import std.conv : text;
 
-			if (length < 0)
+			if (len < 0)
 				throw new Ex(
 					"Attempt to unpack with non-compatible type or buffer is insufficient: expected = array");
 			static if (isStaticArray!T)
-				if (length != T.length)
-					throw new Ex(text("Static array length mismatch: got = ", length,
+				if (len != T.length)
+					throw new Ex(text("Static array length mismatch: got = ", len,
 							"expected = ", T.length));
 			static if (__traits(compiles, buf.length))
-				if (pos + length > buf.length)
-					throw new Ex(text("Invalid array size in byte stream: Length (", length,
+				if (pos + len > buf.length)
+					throw new Ex(text("Invalid array size in byte stream: Length (", len,
 							") is larger than internal buffer size (", buf.length, ")"));
 		} else {
-			if (length < 0)
+			if (len < 0)
 				return T.init;
 			static if (isStaticArray!T) {
-				if (length != T.length)
+				if (len != T.length)
 					return T.init;
 			}
 		}
@@ -313,94 +326,93 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			else {
 				import std.array;
 
-				T array = uninitializedArray!T(length);
+				T array = uninitializedArray!T(len);
 			}
-		if (length == 0)
+		if (len == 0)
 			return array;
 		static if (U.sizeof == 1) {
-			check(length);
+			check(len);
 			static if (isStaticArray!T)
-				array = (cast(U[])read(length))[0 .. T.length];
+				array = (cast(U[])read(len))[0 .. T.length];
 			else
-				array = cast(T)read(length);
+				array = cast(T)read(len);
 		} else
 			foreach (ref a; array)
 				a = unpack!U;
 		return array;
 	}
 
-	bool unpack(T)(ref T array) nothrow if (isSomeArray!T) {
+	MsgPackErr unpack(T)(ref T array) nothrow if (isSomeArray!T) {
 		alias U = typeof(T.init[0]);
 
 		const spos = pos;
 		if (checkNil()) {
 			static if (isStaticArray!T)
-				return false;
+				return MsgPackErr.invalidType;
 			else
 				return unpackNil(array);
 		}
 		static if (U.sizeof == 1)
-			const length = beginBin();
+			const len = beginBin();
 		else
-			const length = beginArray();
-		if (length < 0)
-			return false;
+			const len = beginArray();
+		if (len < 0)
+			return cast(MsgPackErr)-len;
 		static if (__traits(compiles, buf.length))
-			if (length > buf.length) {
+			if (len > buf.length) {
 				pos = spos;
-				return false;
+				return MsgPackErr.insufficientBuffer;
 			}
 		static if (isStaticArray!T)
-			if (length != T.length) {
+			if (len != T.length) {
 				pos = spos;
-				return false;
+				return MsgPackErr.arraySizeMismatch;
 			}
-		if (length == 0)
-			return true;
+		if (len == 0)
+			return MsgPackErr.ok;
 		static if (U.sizeof == 1) {
-			if (!canRead(length)) {
+			if (!canRead(len)) {
 				pos = spos;
-				return false;
+				return MsgPackErr.insufficientBuffer;
 			}
 			static if (isStaticArray!T)
-				array = (cast(U[])read(length))[0 .. T.length];
+				array = (cast(U[])read(len))[0 .. T.length];
 			else
-				array = cast(T)read(length);
+				array = cast(T)read(len);
 		} else {
 			static if (!isStaticArray!T) {
-				if (array.length != length) {
+				if (array.length != len) {
 					version (D_BetterC) {
 						pos = spos;
-						return false;
+						return MsgPackErr.arraySizeMismatch;
 					} else {
 						import std.array;
 
-						array = uninitializedArray!T(length);
+						array = uninitializedArray!T(len);
 					}
 				}
 			}
-			try
+			try {
 				foreach (ref a; array)
 					a = unpack!U;
-					catch (Exception)
-						return false;
+			} catch (Exception)
+				return MsgPackErr.invalidType;
 		}
-		return true;
+		return MsgPackErr.ok;
 	}
 
 	/// ditto
 	T unpack(T : V[K], K, V)() {
 		T array;
 
-		if (unpackNil(array))
+		if (unpackNil(array) == MsgPackErr.ok)
 			return array;
 
-		const length = beginMap();
-		if (length < 0)
-			throw new Ex(
-				"Attempt to unpack with non-compatible type: expected = map");
+		const len = beginMap();
+		if (len < 0)
+			throw new Ex("Attempt to unpack with non-compatible type: expected = map");
 
-		foreach (i; 0 .. length) {
+		foreach (i; 0 .. len) {
 			K k = unpack!K;
 			array[k] = unpack!V;
 		}
@@ -421,13 +433,13 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 
 	Returns: true if succeed
 	+/
-	bool unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1) {
+	MsgPackErr unpackArray(Types...)(ref Types objects) nothrow if (Types.length > 1) {
 		const spos = pos;
-		const length = beginArray();
-		if (length != Types.length) {
+		const len = beginArray();
+		if (len != Types.length) {
 			// the number of deserialized objects is mismatched
 			pos = spos;
-			return false;
+			return len < 0 ? cast(MsgPackErr)-len : MsgPackErr.arraySizeMismatch;
 		}
 
 		foreach (i, T; Types)
@@ -435,23 +447,23 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 				objects[i] = unpack!T;
 			catch (Exception) {
 				pos = spos;
-				return false;
+				return MsgPackErr.invalidType;
 			}
 		// unpack(objects);  // slow :(
 
-		return true;
+		return MsgPackErr.ok;
 	}
 
 	/// ditto
-	bool unpackMap(Types...)(ref Types objects) nothrow if (Types.length > 1) {
+	MsgPackErr unpackMap(Types...)(ref Types objects) nothrow if (Types.length > 1) {
 		static assert(Types.length % 2 == 0, "The number of arguments must be even");
 
 		const spos = pos;
-		const length = beginMap();
-		if (length != Types.length >> 1) {
+		const len = beginMap();
+		if (len != Types.length >> 1) {
 			// the number of deserialized objects is mismatched
 			pos = spos;
-			return false;
+			return len < 0 ? cast(MsgPackErr)-len : MsgPackErr.mapSizeMismatch;
 		}
 
 		foreach (i, T; Types)
@@ -459,39 +471,39 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 				objects[i] = unpack!T;
 			catch (Exception) {
 				pos = spos;
-				return false;
+				return MsgPackErr.invalidType;
 			}
 
-		return this;
+		return MsgPackErr.ok;
 	}
 
 	/// ditto
-	bool unpackAA(K, V)(K[V] array) nothrow {
-		if (unpackNil(array))
-			return true;
+	MsgPackErr unpackAA(K, V)(K[V] array) nothrow {
+		if (unpackNil(array) == MsgPackErr.ok)
+			return MsgPackErr.ok;
 
-		const length = beginMap();
-		if (length == 0)
-			return true;
-		if (length < 0)
-			return false;
+		const len = beginMap();
+		if (len == 0)
+			return MsgPackErr.ok;
+		if (len < 0)
+			return cast(MsgPackErr)-len;
 
-		foreach (i; 0 .. length) {
+		foreach (i; 0 .. len) {
 			try {
 				K k = unpack!K;
 				array[k] = unpack!V;
 			} catch (Exception)
-				return false;
+				return MsgPackErr.invalidType;
 		}
 
-		return true;
+		return MsgPackErr.ok;
 	}
 
 	long begin(Format f1 = Format.STR, size_t llen = 32, Format f2 = Format.ARRAY16)() nothrow {
 		enum Raw = f1 == Format.STR || (Format.BIN8 <= f1 && f1 <= Format.BIN32);
 		if (!canRead)
-			return -1;
-		int header = read();
+			return -MsgPackErr.insufficientBuffer;
+		const int header = read();
 
 		if (f1 <= header && header < f1 + llen)
 			return header & (llen - 1);
@@ -500,14 +512,14 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 		case Format.BIN8, Format.STR8:
 				if (canRead(ubyte.sizeof))
 					return read();
-				return -1;
+				return -MsgPackErr.insufficientBuffer;
 		case Format.BIN16, Format.STR16:
 			} else {
 		case f2:
 			}
 			if (canRead(ushort.sizeof))
 				return read!ushort();
-			return -1;
+			return -MsgPackErr.insufficientBuffer;
 			static if (Raw) {
 		case Format.BIN32, Format.STR32:
 			} else {
@@ -515,12 +527,12 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			}
 			if (canRead(uint.sizeof))
 				return read!uint();
-			return -1;
+			return -MsgPackErr.insufficientBuffer;
 		case Format.NIL:
 			return 0;
 		default:
 			pos--;
-			return -1;
+			return -MsgPackErr.invalidType;
 		}
 	}
 
@@ -563,21 +575,22 @@ struct Unpacker(Stream = const(ubyte)[]) if (isInputBuffer!(Stream, ubyte)) {
 			return val;
 		}
 
-		bool unpackObj(T)(ref T obj) if (is(T == struct)) {
+		MsgPackErr unpackObj(T)(ref T obj) if (is(T == struct)) {
 			const len = beginArray();
 			if (len == 0)
-				return true;
+				return MsgPackErr.ok;
 			if (len < 0)
-				return false;
+				return cast(MsgPackErr)-len;
 			if (len != NumOfSerializingMembers!T) {
+				// the number of struct fields is mismatched
 				pos -= calculateSize(len) + 1;
-				return false; // the number of struct fields is mismatched
+				return MsgPackErr.arraySizeMismatch;
 			}
 
 			foreach (i, ref member; obj.tupleof)
 				static if (isPackedField!(T.tupleof[i]))
 					member = unpack!(typeof(member));
-			return true;
+			return MsgPackErr.ok;
 		}
 	}
 
@@ -587,12 +600,13 @@ nothrow:
 		Unpacks an EXT value into `type` and `data`.
 		Returns: true if succeed
 	+/
-	bool unpackExt(T)(ref byte type, ref T data) if (isOutputBuffer!(T, ubyte)) {
+	MsgPackErr unpackExt(T)(ref byte type, ref T data)
+	if (isOutputBuffer!(T, ubyte)) {
 		if (!canRead)
-			return false;
+			return MsgPackErr.insufficientBuffer;
 
 		const spos = pos;
-		int header = read();
+		const int header = read();
 		uint len = void;
 		if (header >= Format.EXT && header <= Format.EXT + 4) {
 			// Fixed
@@ -602,39 +616,39 @@ nothrow:
 		case Format.EXT8:
 			if (!canRead(1 + 1)) {
 				pos--;
-				return false;
+				return MsgPackErr.insufficientBuffer;
 			}
 			len = read();
 			break;
 		case Format.EXT16:
 			if (!canRead(2 + 1)) {
 				pos--;
-				return false;
+				return MsgPackErr.insufficientBuffer;
 			}
 			len = read!ushort();
 			break;
 		case Format.EXT32:
 			if (!canRead(4 + 1)) {
 				pos--;
-				return false;
+				return MsgPackErr.insufficientBuffer;
 			}
 			len = read!uint();
 			break;
 		default:
 			pos--;
-			return false;
+			return MsgPackErr.invalidType;
 		}
 
 		if (!canRead(len + 1)) {
 			pos = spos;
-			return false;
+			return MsgPackErr.insufficientBuffer;
 		}
 
 		// Read type
 		type = read();
 		// Read and check data
 		AOutputBuf!T(data) ~= read(len);
-		return true;
+		return MsgPackErr.ok;
 	}
 
 	ubyte peek() => buf[pos];
@@ -689,16 +703,16 @@ nothrow:
 
 	Returns: true if next object is nil.
 	+/
-	bool unpackNil(T)(ref T value) {
+	MsgPackErr unpackNil(T)(ref T value) {
 		if (!canRead)
-			return false;
+			return MsgPackErr.insufficientBuffer;
 
 		if (peek() == Format.NIL) {
 			value = null;
 			pos++;
-			return true;
+			return MsgPackErr.ok;
 		}
-		return false;
+		return MsgPackErr.invalidType;
 	}
 }
 
@@ -824,7 +838,7 @@ version (D_Exceptions) unittest {
 			byte type;
 			ubyte[] deserializedData;
 
-			assert(unpacker.unpackExt(type, deserializedData));
+			assert(unpacker.unpackExt(type, deserializedData) == MsgPackErr.ok);
 			assert(type == 7, text("type: ", type));
 			assert(data == deserializedData, text(data, "\nExpected: ", deserializedData));
 		}
